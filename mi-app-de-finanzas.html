@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control de Finanzas Personales</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .form-field-transition { max-height: 0; overflow: hidden; transition: max-height 0.5s ease-in-out, opacity 0.5s ease-in-out; opacity: 0; }
+        .form-field-transition.visible { max-height: 100px; opacity: 1; }
+        .modal, .tab-content { transition: opacity 0.3s ease; }
+        .tab-btn.active { border-color: #3b82f6; color: #3b82f6; background-color: #eff6ff; }
+        .stats-filter-container { transition: opacity 0.3s ease, transform 0.3s ease; }
+        .btn-loading { position: relative; pointer-events: none; color: transparent !important; }
+        .btn-loading::after {
+            content: ''; position: absolute; left: 50%; top: 50%; width: 20px; height: 20px;
+            margin-left: -10px; margin-top: -10px; border: 2px solid #fff; border-top-color: transparent;
+            border-radius: 50%; animation: spin 0.6s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        #global-loader {
+            background-color: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(4px);
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div id="global-loader" class="fixed inset-0 z-50 flex flex-col items-center justify-center">
+        <div class="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+        <p id="loader-text" class="mt-4 text-lg font-semibold text-gray-700">Cargando datos desde Google Sheets...</p>
+    </div>
+
+    <div id="app-container" class="container mx-auto p-4 md:p-8 max-w-5xl opacity-0 transition-opacity duration-500">
+        <!-- El resto del HTML no cambia -->
+        <header class="text-center mb-8"><h1 class="text-4xl font-bold text-gray-900">Panel de Finanzas</h1><p class="text-gray-600 mt-2">Registrá y analizá tus movimientos financieros.</p></header>
+        <div class="mb-6"><div class="border-b border-gray-200"><nav class="-mb-px flex space-x-4"><button id="tab-transacciones" class="tab-btn active whitespace-nowrap py-3 px-5 border-b-2 font-medium text-sm">Transacciones</button><button id="tab-estadisticas" class="tab-btn text-gray-500 hover:text-gray-700 whitespace-nowrap py-3 px-5 border-b-2 font-medium text-sm border-transparent">Estadísticas</button></nav></div></div>
+        <div id="content-transacciones" class="tab-content"><main class="grid grid-cols-1 md:grid-cols-3 gap-8"><div class="md:col-span-1 space-y-8"><div class="bg-white p-6 rounded-2xl shadow-lg"><h2 class="text-lg font-semibold text-gray-500 mb-4">Balance Actual</h2><div id="balance" class="text-4xl font-bold text-gray-900">$0.00</div><div class="flex justify-between mt-6"><div><h3 class="text-sm font-semibold text-green-600">INGRESOS</h3><p id="total-ingresos" class="text-xl font-bold text-green-500">$0.00</p></div><div><h3 class="text-sm font-semibold text-red-600 text-right">GASTOS</h3><p id="total-gastos" class="text-xl font-bold text-red-500">$0.00</p></div></div><button id="manage-categories-btn" class="mt-6 w-full bg-gray-200 text-gray-700 font-bold py-2 px-4 rounded-lg hover:bg-gray-300 transition-colors">Gestionar Categorías</button></div><div class="bg-white p-6 rounded-2xl shadow-lg"><h2 class="text-lg font-semibold text-gray-800 mb-4">Nueva Transacción</h2><form id="transaction-form" class="space-y-4"><div><label for="description" class="text-sm font-medium text-gray-700">Descripción</label><input type="text" id="description" placeholder="Ej: Cliente, Supermercado" class="mt-1 w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500"></div><div><label for="amount" class="text-sm font-medium text-gray-700">Monto</label><input type="number" id="amount" placeholder="25000" class="mt-1 w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500"></div><div><label for="transaction-date" class="text-sm font-medium text-gray-700">Fecha</label><input type="date" id="transaction-date" class="mt-1 w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500"></div><div><label for="category" class="text-sm font-medium text-gray-700">Categoría</label><select id="category" class="mt-1 w-full p-3 border rounded-lg bg-white focus:ring-2 focus:ring-blue-500"></select></div><div id="proveedor-container" class="form-field-transition"><label for="proveedor" class="text-sm font-medium text-gray-700">Proveedor</label><input type="text" id="proveedor" placeholder="Ej: Mercadolibre, Kiosco" class="mt-1 w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500"></div><button type="submit" id="submit-btn" class="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 shadow-md">Agregar Transacción</button></form></div></div><div class="md:col-span-2 bg-white p-6 rounded-2xl shadow-lg"><div class="flex justify-between items-center mb-4"><h2 id="transaction-period-title" class="text-lg font-semibold text-gray-800">Historial</h2><select id="month-filter" class="w-48 p-2 border rounded-lg bg-white text-sm focus:ring-2 focus:ring-blue-500"></select></div><div class="h-[550px] overflow-y-auto no-scrollbar"><ul id="transaction-list" class="space-y-3"><li id="empty-state" class="text-center text-gray-500 py-10"><p>Aún no hay transacciones.</p></li></ul></div></div></main></div>
+        <div id="content-estadisticas" class="tab-content hidden"><div class="bg-white p-6 rounded-2xl shadow-lg"><h2 class="text-2xl font-bold text-gray-800 mb-6">Análisis de Movimientos</h2><div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 items-end"><div><label for="stats-type" class="block text-sm font-medium text-gray-700">Tipo</label><select id="stats-type" class="mt-1 block w-full p-2 text-base border rounded-md"><option value="expense">Gastos</option><option value="income">Ingresos</option></select></div><div><label for="stats-date-from" class="block text-sm font-medium text-gray-700">Desde</label><input type="date" id="stats-date-from" class="mt-1 block w-full p-2 text-base border rounded-md"></div><div><label for="stats-date-to" class="block text-sm font-medium text-gray-700">Hasta</label><input type="date" id="stats-date-to" class="mt-1 block w-full p-2 text-base border rounded-md"></div><div id="stats-proveedor-container" class="stats-filter-container hidden"><label for="stats-proveedor" class="block text-sm font-medium text-gray-700">Proveedor</label><select id="stats-proveedor" class="mt-1 block w-full p-2 text-base border rounded-md"></select></div></div><div class="w-full h-96 mx-auto"><canvas id="stats-chart"></canvas></div><div id="stats-empty-state" class="text-center text-gray-500 py-10 hidden"><p>No hay datos para mostrar.</p></div></div></div>
+    </div>
+    <!-- Modales -->
+    <div id="message-modal" class="modal fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50"><div class="bg-white p-6 rounded-lg shadow-xl text-center"><p id="modal-message-text" class="text-lg"></p><button id="close-message-modal" class="mt-4 bg-blue-600 text-white px-4 py-2 rounded-lg">Cerrar</button></div></div>
+    <div id="categories-modal" class="modal fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-40"><div class="bg-white p-6 rounded-2xl shadow-xl w-full max-w-2xl m-4"><div class="flex justify-between items-center mb-4"><h2 class="text-2xl font-bold text-gray-800">Gestionar Categorías</h2><button id="close-categories-modal" class="text-gray-500 hover:text-gray-800 text-2xl">&times;</button></div><div class="grid grid-cols-1 md:grid-cols-2 gap-6"><div><h3 class="text-lg font-semibold text-green-600 mb-3">Ingresos</h3><ul id="income-categories-list" class="space-y-2 mb-4 h-48 overflow-y-auto no-scrollbar pr-2"></ul><form id="add-income-category-form" class="flex gap-2"><input type="text" placeholder="Nueva categoría" class="flex-grow p-2 border rounded-lg"><button type="submit" class="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600">+</button></form></div><div><h3 class="text-lg font-semibold text-red-600 mb-3">Gastos</h3><ul id="expense-categories-list" class="space-y-2 mb-4 h-48 overflow-y-auto no-scrollbar pr-2"></ul><form id="add-expense-category-form" class="flex gap-2"><input type="text" placeholder="Nueva categoría" class="flex-grow p-2 border rounded-lg"><button type="submit" class="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600">+</button></form></div></div></div></div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', async () => {
+        // https://script.google.com/macros/s/AKfycbzLRBs-_ODcDg0UCdakpVN_noLsO53PTHVPQNbK9eGhhenQRXhgLCFUWAj8LZZkqWG_/exec
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzLRBs-_ODcDg0UCdakpVN_noLsO53PTHVPQNbK9eGhhenQRXhgLCFUWAj8LZZkqWG_/exec";
+
+        const state = {
+            transactions: [],
+            categories: { income: [], expense: [] },
+            chartInstance: null
+        };
+        const dom = {
+            globalLoader: document.getElementById('global-loader'),
+            loaderText: document.getElementById('loader-text'),
+            appContainer: document.getElementById('app-container'),
+            balance: document.getElementById('balance'),
+            totalIngresos: document.getElementById('total-ingresos'),
+            totalGastos: document.getElementById('total-gastos'),
+            transactionList: document.getElementById('transaction-list'),
+            form: document.getElementById('transaction-form'),
+            submitBtn: document.getElementById('submit-btn'),
+            description: document.getElementById('description'),
+            amount: document.getElementById('amount'),
+            transactionDate: document.getElementById('transaction-date'),
+            category: document.getElementById('category'),
+            proveedorContainer: document.getElementById('proveedor-container'),
+            proveedor: document.getElementById('proveedor'),
+            emptyState: document.getElementById('empty-state'),
+            tabTransacciones: document.getElementById('tab-transacciones'),
+            tabEstadisticas: document.getElementById('tab-estadisticas'),
+            contentTransacciones: document.getElementById('content-transacciones'),
+            contentEstadisticas: document.getElementById('content-estadisticas'),
+            messageModal: document.getElementById('message-modal'),
+            modalMessageText: document.getElementById('modal-message-text'),
+            closeMessageModalBtn: document.getElementById('close-message-modal'),
+            categoriesModal: document.getElementById('categories-modal'),
+            manageCategoriesBtn: document.getElementById('manage-categories-btn'),
+            closeCategoriesModalBtn: document.getElementById('close-categories-modal'),
+            incomeCatList: document.getElementById('income-categories-list'),
+            expenseCatList: document.getElementById('expense-categories-list'),
+            addIncomeCatForm: document.getElementById('add-income-category-form'),
+            addExpenseCatForm: document.getElementById('add-expense-category-form'),
+            statsType: document.getElementById('stats-type'),
+            statsDateFrom: document.getElementById('stats-date-from'),
+            statsDateTo: document.getElementById('stats-date-to'),
+            statsChart: document.getElementById('stats-chart').getContext('2d'),
+            statsEmptyState: document.getElementById('stats-empty-state'),
+            monthFilter: document.getElementById('month-filter'),
+            transactionPeriodTitle: document.getElementById('transaction-period-title'),
+            statsProveedorContainer: document.getElementById('stats-proveedor-container'),
+            statsProveedor: document.getElementById('stats-proveedor'),
+        };
+        
+        const showModal = (modal, msg = '') => { if(msg) dom.modalMessageText.textContent=msg; modal.classList.remove('hidden'); modal.classList.add('flex'); };
+        const hideModal = (modal) => { modal.classList.add('hidden'); modal.classList.remove('flex'); };
+        const formatCurrency = amount => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(amount);
+        const toISODateString = date => new Date(date).toISOString().split('T')[0];
+        const setTodayDate = () => dom.transactionDate.value = toISODateString(new Date());
+
+        const setDefaultStatsDates = () => {
+            const now = new Date();
+            const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+            dom.statsDateFrom.value = toISODateString(firstDayOfMonth);
+            dom.statsDateTo.value = toISODateString(now);
+        };
+        
+        const fetchWithTimeout = async (resource, options = {}, timeout = 20000) => {
+            const controller = new AbortController();
+            const id = setTimeout(() => controller.abort(), timeout);
+            const response = await fetch(resource, { ...options, signal: controller.signal });
+            clearTimeout(id);
+            return response;
+        };
+
+        const fetchInitialData = async () => {
+             if (SCRIPT_URL === "PEGÁ_TU_NUEVA_URL_ACÁ") {
+                const errorMessage = "Error de configuración: necesitás pegar tu nueva URL del script en el código de la aplicación.";
+                dom.loaderText.innerHTML = `<span class="text-red-600">${errorMessage}</span>`;
+                dom.globalLoader.querySelector('.animate-spin').style.display = 'none';
+                throw new Error(errorMessage);
+            }
+            try {
+                const response = await fetchWithTimeout(SCRIPT_URL);
+                if (!response.ok) throw new Error(`Error de Red: ${response.statusText}`);
+                
+                const responseText = await response.text();
+                let result;
+                try {
+                    result = JSON.parse(responseText);
+                } catch (e) {
+                    console.error("No se pudo parsear la respuesta como JSON. Respuesta del script:", responseText);
+                    throw new Error("El script de Google devolvió una respuesta inválida (no es JSON). Verificá que el script no tenga errores y esté desplegado correctamente.");
+                }
+
+                if (result.result === 'success') {
+                    if (result.data && result.data.transactions && result.data.categories) {
+                        state.transactions = result.data.transactions.map(tx => ({...tx, date: new Date(tx.date).toISOString() }));
+                        state.categories = result.data.categories;
+                        
+                        if (!state.categories.income) state.categories.income = [];
+                        if (!state.categories.expense) state.categories.expense = [];
+
+                        if (!state.categories.income.length && !state.categories.expense.length) {
+                            state.categories = { income: ['Sueldo'], expense: ['Supermercado', 'Servicios'] };
+                            await saveCategoriesToSheet();
+                        }
+                    } else {
+                         console.error("Respuesta recibida del script:", JSON.stringify(result, null, 2));
+                         throw new Error("La respuesta del script no tiene el formato esperado. Revisa la consola para ver la respuesta exacta. Asegurate de haber desplegado la última versión del script (usando 'Nueva versión').");
+                    }
+                } else {
+                    throw new Error(result.message || "Error desconocido en la respuesta del script.");
+                }
+            } catch (error) {
+                let errorMessage;
+                if (error.name === 'AbortError') errorMessage = "La carga de datos tardó demasiado (timeout). Verificá tu conexión y los permisos del script.";
+                else errorMessage = `No se pudo cargar: ${error.message}`;
+                console.error(errorMessage);
+                dom.loaderText.innerHTML = `<span class="text-red-600">${errorMessage}</span>`;
+                dom.globalLoader.querySelector('.animate-spin').style.display = 'none';
+                throw new Error("Initialization failed");
+            }
+        };
+        
+        const handleAddTransaction = async (e) => {
+            e.preventDefault();
+            if (dom.description.value.trim()===''||dom.amount.value.trim()===''||dom.transactionDate.value==='') {
+                showModal(dom.messageModal, 'Por favor, completá descripción, monto y fecha.'); return;
+            }
+            const selOpt = dom.category.options[dom.category.selectedIndex];
+            if (!selOpt) { showModal(dom.messageModal, 'Por favor, seleccioná una categoría válida.'); return; }
+            const isExpense = selOpt.parentElement.label === 'Gastos';
+            const txDate = new Date(dom.transactionDate.value+'T12:00:00');
+            
+            const transaction = {
+                description: dom.description.value,
+                amount: isExpense ? -parseFloat(dom.amount.value) : parseFloat(dom.amount.value),
+                categoryFriendlyName: selOpt.textContent,
+                proveedor: isExpense ? dom.proveedor.value.trim() : null, date: txDate.toISOString()
+            };
+
+            dom.submitBtn.classList.add('btn-loading');
+            try {
+                await postToSheet({ action: 'addTransaction', payload: transaction });
+                state.transactions.push(transaction);
+                refreshUI();
+            } catch (error) {
+                console.error("Error al guardar:", error);
+                showModal(dom.messageModal, `No se pudo guardar. Error: ${error.message}`);
+            } finally {
+                dom.submitBtn.classList.remove('btn-loading');
+                dom.form.reset(); 
+                setTodayDate(); 
+                toggleProveedorField();
+            }
+        };
+        
+        const saveCategoriesToSheet = async () => {
+            try {
+                await postToSheet({ action: 'updateCategories', payload: state.categories });
+            } catch (error) {
+                console.error("Error al guardar categorías:", error);
+                showModal(dom.messageModal, `No se pudieron guardar los cambios de categorías. Error: ${error.message}`);
+            }
+        };
+
+        const postToSheet = async (data) => {
+             const response = await fetchWithTimeout(SCRIPT_URL, {
+                method: 'POST',
+                mode: 'cors',
+                cache: 'no-cache',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify(data)
+            });
+            if (!response.ok) throw new Error(`Error de red: ${response.statusText}`);
+            const result = await response.json();
+            if (result.result !== 'success') throw new Error(result.message || 'Error desconocido al guardar.');
+            return result;
+        };
+        
+        const handleAddCategory = async (e, type) => {
+            e.preventDefault(); const input = e.target.querySelector('input'); const newCat = input.value.trim();
+            if (newCat && !state.categories[type].includes(newCat)) {
+                state.categories[type].push(newCat);
+                renderCategoriesInModal();
+                populateTransactionFormCategories();
+                input.value = '';
+                await saveCategoriesToSheet();
+            } else if (newCat) {
+                showModal(dom.messageModal, `La categoría "${newCat}" ya existe.`);
+            }
+        };
+
+        const handleDeleteCategory = async (name, type) => {
+            state.categories[type] = state.categories[type].filter(c => c !== name);
+            renderCategoriesInModal();
+            populateTransactionFormCategories();
+            await saveCategoriesToSheet();
+        };
+
+        const refreshUI = () => { updateValues(); populateMonthFilter(); populateProveedorFilter(); renderTransactions(); if(!dom.contentEstadisticas.classList.contains('hidden')) updateStatistics(); };
+        const initApp = () => { populateTransactionFormCategories(); toggleProveedorField(); setTodayDate(); setDefaultStatsDates(); refreshUI(); dom.appContainer.classList.add('opacity-100'); dom.globalLoader.classList.add('hidden'); };
+        const switchTab = (activeTab) => { const isTx = activeTab === 'transacciones'; dom.tabTransacciones.classList.toggle('active', isTx); dom.tabEstadisticas.classList.toggle('active', !isTx); dom.contentTransacciones.classList.toggle('hidden', !isTx); dom.contentEstadisticas.classList.toggle('hidden', isTx); if (!isTx) { toggleProveedorStatsFilter(); updateStatistics(); } };
+        const populateMonthFilter = () => { const uniqueMonths = [...new Set(state.transactions.map(t => t.date.substring(0, 7)))].sort().reverse(); const currentMonthYear = new Date().toISOString().substring(0, 7); dom.monthFilter.innerHTML = '<option value="all">Ver todos los meses</option>'; uniqueMonths.forEach(monthStr => { const [year, month] = monthStr.split('-'); const monthName = new Date(year, month - 1).toLocaleString('es-ES', { month: 'long' }); const option = document.createElement('option'); option.value = monthStr; option.textContent = `${monthName.charAt(0).toUpperCase() + monthName.slice(1)} ${year}`; dom.monthFilter.appendChild(option); }); dom.monthFilter.value = uniqueMonths.includes(currentMonthYear) ? currentMonthYear : 'all'; };
+        const populateProveedorFilter = () => { const uniqueProveedores = [...new Set(state.transactions.filter(t => t.proveedor && t.proveedor.trim() !== '').map(t => t.proveedor))].sort(); dom.statsProveedor.innerHTML = '<option value="all">Todos los proveedores</option>'; uniqueProveedores.forEach(p => { const option = document.createElement('option'); option.value = p; option.textContent = p; dom.statsProveedor.appendChild(option); }); };
+        const toggleProveedorStatsFilter = () => { const isExpense = dom.statsType.value === 'expense'; dom.statsProveedorContainer.classList.toggle('hidden', !isExpense); if (!isExpense) dom.statsProveedor.value = 'all'; };
+        const populateTransactionFormCategories = () => { dom.category.innerHTML = ''; const createOptGroup = (label, items) => { const optgroup = document.createElement('optgroup'); optgroup.label = label; items.forEach(cat => { const opt = document.createElement('option'); opt.value = `${label.toLowerCase().slice(0,-1)}_${cat.replace(/\s+/g,'_').toLowerCase()}`; opt.textContent = cat; optgroup.appendChild(opt); }); return optgroup; }; dom.category.appendChild(createOptGroup('Ingresos', state.categories.income)); dom.category.appendChild(createOptGroup('Gastos', state.categories.expense)); };
+        const renderCategoriesInModal = () => { const createCatItem = (name, type) => { const li = document.createElement('li'); li.className = 'flex justify-between items-center bg-gray-100 p-2 rounded-md'; li.textContent = name; const delBtn = document.createElement('button'); delBtn.innerHTML = '&#x1F5D1;'; delBtn.className = 'text-sm hover:text-red-500'; delBtn.onclick = () => handleDeleteCategory(name, type); li.appendChild(delBtn); return li; }; dom.incomeCatList.innerHTML = ''; state.categories.income.forEach(c => dom.incomeCatList.appendChild(createCatItem(c, 'income'))); dom.expenseCatList.innerHTML = ''; state.categories.expense.forEach(c => dom.expenseCatList.appendChild(createCatItem(c, 'expense'))); };
+        const updateValues = () => { const amounts = state.transactions.map(t => t.amount); const total = amounts.reduce((a, i) => a + i, 0); const income = amounts.filter(i => i > 0).reduce((a, i) => a + i, 0); const expense = amounts.filter(i => i < 0).reduce((a, i) => a + i, 0) * -1; dom.balance.textContent = formatCurrency(total); dom.totalIngresos.textContent = formatCurrency(income); dom.totalGastos.textContent = formatCurrency(expense); };
+        const addTransactionToDOM = (t) => { const item = document.createElement('li'); const isIncome = t.amount > 0; const fDate = new Date(t.date).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }); item.className = `flex justify-between items-center p-4 bg-gray-50 rounded-lg border-l-4 shadow-sm ${isIncome?'border-green-500':'border-red-500'}`; const provHTML = t.proveedor ? `<span class="text-xs text-gray-500 italic block">Proveedor: ${t.proveedor}</span>` : ''; item.innerHTML = `<div class="flex-grow pr-4"><div class="flex justify-between items-baseline"><span class="font-semibold text-gray-800">${t.description}</span><span class="text-xs text-gray-500 flex-shrink-0">${fDate}</span></div>${provHTML}<span class="text-sm text-gray-600 block">${t.categoryFriendlyName}</span></div><div class="text-right flex-shrink-0"><span class="font-bold text-lg ${isIncome?'text-green-600':'text-red-600'} block">${isIncome?'':'-'}${formatCurrency(Math.abs(t.amount))}</span></div>`; dom.transactionList.prepend(item); };
+        const renderTransactions = () => { const selectedMonth = dom.monthFilter.value; const filtered = state.transactions.filter(t => selectedMonth === 'all' || t.date.startsWith(selectedMonth)); dom.transactionList.innerHTML = ''; dom.emptyState.style.display = 'none'; if (filtered.length === 0) { dom.emptyState.style.display = 'block'; } else { filtered.sort((a,b) => new Date(b.date) - new Date(a.date)).forEach(addTransactionToDOM); } const titleText = dom.monthFilter.options[dom.monthFilter.selectedIndex].textContent; dom.transactionPeriodTitle.textContent = `Historial (${titleText})`; };
+        const toggleProveedorField = () => { if (!dom.category.value) return; const isExpense = dom.category.options[dom.category.selectedIndex].parentElement.label === 'Gastos'; dom.proveedorContainer.classList.toggle('visible', isExpense); };
+        const updateStatistics = () => { const type = dom.statsType.value; const proveedor = dom.statsProveedor.value; const startDate = new Date(dom.statsDateFrom.value + 'T00:00:00'); const endDate = new Date(dom.statsDateTo.value + 'T23:59:59'); if (isNaN(startDate) || isNaN(endDate)) return; const filteredTx = state.transactions.filter(t => { const tDate = new Date(t.date); const isIncome = t.amount > 0; const typeMatch = (type === 'income' && isIncome) || (type === 'expense' && !isIncome); const proveedorMatch = type === 'expense' ? (proveedor === 'all' || t.proveedor === proveedor) : true; return typeMatch && proveedorMatch && tDate >= startDate && tDate <= endDate; }); const grouped = filteredTx.reduce((acc, t) => { const key = t.categoryFriendlyName; if (!acc[key]) acc[key] = 0; acc[key] += Math.abs(t.amount); return acc; }, {}); renderChart(Object.keys(grouped), Object.values(grouped), type); };
+        const renderChart = (labels, data, type) => { if (state.chartInstance) state.chartInstance.destroy(); dom.statsEmptyState.style.display = 'none'; if(labels.length === 0) { dom.statsEmptyState.style.display = 'block'; return; } const colors = type==='income'?['#22c55e','#4ade80','#86efac','#bbf7d0','#dcfce7']:['#ef4444','#f87171','#fca5a5','#fecaca','#fee2e2']; state.chartInstance = new Chart(dom.statsChart, { type:'doughnut', data:{labels,datasets:[{data,backgroundColor:colors,borderColor:'#fff'}]}, options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'},tooltip:{callbacks:{label:c=>`${c.label||''}: ${formatCurrency(c.parsed)}`}}}}}); };
+        
+        try {
+            await fetchInitialData();
+            initApp();
+            
+            dom.tabTransacciones.addEventListener('click', () => switchTab('transacciones'));
+            dom.tabEstadisticas.addEventListener('click', () => switchTab('estadisticas'));
+            dom.form.addEventListener('submit', handleAddTransaction);
+            dom.category.addEventListener('change', toggleProveedorField);
+            dom.manageCategoriesBtn.addEventListener('click', () => { renderCategoriesInModal(); showModal(dom.categoriesModal); });
+            dom.closeCategoriesModalBtn.addEventListener('click', () => hideModal(dom.categoriesModal));
+            dom.closeMessageModalBtn.addEventListener('click', () => hideModal(dom.messageModal));
+            dom.addIncomeCatForm.addEventListener('submit', e => handleAddCategory(e, 'income'));
+            dom.addExpenseCatForm.addEventListener('submit', e => handleAddCategory(e, 'expense'));
+            dom.statsType.addEventListener('change', () => { toggleProveedorStatsFilter(); updateStatistics(); });
+            dom.statsDateFrom.addEventListener('change', updateStatistics);
+            dom.statsDateTo.addEventListener('change', updateStatistics);
+            dom.statsProveedor.addEventListener('change', updateStatistics);
+            dom.monthFilter.addEventListener('change', renderTransactions);
+        } catch(error) {
+            // El error ya se mostró. La inicialización se detiene.
+        }
+    });
+    </script>
+</body>
+</html>
