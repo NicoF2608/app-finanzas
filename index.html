@@ -1,5 +1,5 @@
 // @ts-nocheck
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Dumbbell, Users, CalendarDays, LineChart, Plus, Trash2, 
   Brain, Save, Activity, Target, CheckCircle, Info, Lock, Play,
@@ -7,57 +7,44 @@ import {
   Camera, MessageSquare, Star, Edit, Eye, Shield, ArrowUpRight,
   MessageCircle, Send, RotateCw, Timer, Weight, ListPlus, AlignLeft,
   Library, Calendar, Video, Utensils, FileText, ClipboardList, BookOpen, ThumbsUp,
-  Youtube, Search, Copy, Move, ChevronDown, ChevronUp, ExternalLink, LogOut,
-  TrendingUp, Zap, Award
+  Youtube, Search, Copy, Move, ChevronDown, ChevronUp, ExternalLink, LogOut
 } from 'lucide-react';
 import { 
   LineChart as RechartsLineChart, Line, XAxis, YAxis, CartesianGrid, 
-  Tooltip as RechartsTooltip, ResponsiveContainer, RadialBarChart, RadialBar,
-  BarChart, Bar, PieChart, Pie, Cell
+  Tooltip as RechartsTooltip, ResponsiveContainer, RadialBarChart, RadialBar
 } from 'recharts';
-import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import { 
-  getFirestore, collection, onSnapshot, doc, setDoc, addDoc, getDocs, deleteDoc, query, where
+  getFirestore, collection, onSnapshot, doc, setDoc, addDoc, getDocs, deleteDoc
 } from 'firebase/firestore';
 
 // --- CONFIGURACIÓN DE FIREBASE ---
-const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-const app = initializeApp(firebaseConfig);
+const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+  apiKey: "AIzaSyA5EIoQCRnMSinHy7bWejEHHiLRT8FtGcQ",
+  authDomain: "coronados-de-gloria-2-0.firebaseapp.com",
+  projectId: "coronados-de-gloria-2-0",
+  storageBucket: "coronados-de-gloria-2-0.firebasestorage.app",
+  messagingSenderId: "35540492006",
+  appId: "1:35540492006:web:bfca94571ea6a39aeae527"
+};
+const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 const auth = getAuth(app);
 const db = getFirestore(app);
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'coronados-app';
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'coronados-app-v3';
 
 // --- CONSTANTES, MARCA Y UTILIDADES ---
 const LOGO_URL = "https://placehold.co/400x400/111827/f59e0b?text=CDG"; 
 const DEFAULT_AVATAR = "https://placehold.co/150x150/374151/9ca3af?text=USER";
 
-// ✅ DEEP COPY MEJORADO
 const deepCopy = (obj) => {
   if (!obj) return obj;
-  try {
-    return JSON.parse(JSON.stringify(obj));
-  } catch (error) {
-    console.error("Error en deepCopy:", error);
-    return obj;
-  }
+  const copy = JSON.parse(JSON.stringify(obj));
+  if (obj.id) copy.id = obj.id; 
+  return copy;
 };
 
-// ✅ VALIDACIÓN DE FECHAS
-const createDate = (dateStr) => {
-  if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-    console.error("Formato de fecha inválido:", dateStr);
-    return null;
-  }
-  try {
-    return new Date(dateStr + 'T00:00:00');
-  } catch (error) {
-    console.error("Error creando fecha:", error);
-    return null;
-  }
-};
-
-// ✅ ALGORITMO MEJORADO PARA LIMPIAR URLs DE YOUTUBE
+// ALGORITMO MEJORADO PARA LIMPIAR URLs SUCÍAS DE YOUTUBE
 const getYoutubeEmbedUrl = (url) => {
   if (!url) return null;
   const regExp = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/|youtube\.com\/shorts\/)([^"&?\/\s]{11})/i;
@@ -66,60 +53,28 @@ const getYoutubeEmbedUrl = (url) => {
 };
 
 const compressImage = (file, maxWidth = 800) => {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     const reader = new FileReader();
     reader.readAsDataURL(file);
     reader.onload = (event) => {
-      const img = new Image();
-      img.src = event.target.result;
+      const img = new Image(); img.src = event.target.result;
       img.onload = () => {
         const canvas = document.createElement('canvas');
         const scaleSize = maxWidth / img.width;
-        canvas.width = maxWidth;
-        canvas.height = img.height * scaleSize;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL('image/jpeg', 0.6));
+        canvas.width = maxWidth; canvas.height = img.height * scaleSize;
+        const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.6)); 
       };
-      img.onerror = reject;
     };
-    reader.onerror = reject;
   });
 };
 
-// ✅ HOOK PERSONALIZADO PARA OPERACIONES ASYNC
-const useAsyncHandler = () => {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  
-  const execute = useCallback(async (asyncFn, onSuccess, onError) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await asyncFn();
-      if (onSuccess) onSuccess(result);
-      return { success: true, data: result };
-    } catch (err) {
-      console.error(err);
-      setError(err.message);
-      if (onError) onError(err);
-      return { success: false, error: err };
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-  
-  return { execute, loading, error };
-};
+// --- COMPONENTES UI BÁSICOS ---
+const Card = ({ children, className = '' }) => (
+  <div className={`bg-[#1f2937] border border-[#374151] rounded-2xl shadow-xl overflow-hidden ${className}`}>{children}</div>
+);
 
-// --- COMPONENTES UI BÁSICOS OPTIMIZADOS ---
-const Card = React.memo(({ children, className = '' }) => (
-  <div className={`bg-[#1f2937] border border-[#374151] rounded-2xl shadow-xl overflow-hidden ${className}`}>
-    {children}
-  </div>
-));
-
-const Button = React.memo(({ children, variant = 'primary', onClick, className = '', disabled = false, type = "button" }) => {
+const Button = ({ children, variant = 'primary', onClick, className = '', disabled = false, type = "button" }) => {
   const baseStyle = "px-4 py-2 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed";
   const variants = {
     primary: "bg-amber-500 hover:bg-amber-600 text-gray-900 shadow-[0_0_15px_rgba(245,158,11,0.3)]",
@@ -128,46 +83,27 @@ const Button = React.memo(({ children, variant = 'primary', onClick, className =
     success: "bg-emerald-500 hover:bg-emerald-600 text-white shadow-[0_0_15px_rgba(16,185,129,0.3)]",
     darkAccent: "bg-[#273243] hover:bg-[#374151] text-amber-500 border border-[#374151]"
   };
-  return (
-    <button 
-      type={type} 
-      onClick={onClick} 
-      disabled={disabled} 
-      className={`${baseStyle} ${variants[variant]} ${className}`}
-    >
-      {children}
-    </button>
-  );
-});
+  return <button type={type} onClick={onClick} disabled={disabled} className={`${baseStyle} ${variants[variant]} ${className}`}>{children}</button>;
+};
 
-const Input = React.memo(({ label, ...props }) => (
+const Input = ({ label, ...props }) => (
   <div className="flex flex-col gap-1 w-full">
     {label && <label className="text-sm text-gray-400 font-medium">{label}</label>}
-    <input 
-      className="bg-[#111827] border border-[#374151] rounded-xl px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all placeholder-gray-600" 
-      {...props} 
-    />
+    <input className="bg-[#111827] border border-[#374151] rounded-xl px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all placeholder-gray-600" {...props} />
   </div>
-));
+);
 
-const Textarea = React.memo(({ label, ...props }) => (
+const Textarea = ({ label, ...props }) => (
   <div className="flex flex-col gap-1 w-full">
     {label && <label className="text-sm text-gray-400 font-medium">{label}</label>}
-    <textarea 
-      className="bg-[#111827] border border-[#374151] rounded-xl px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all placeholder-gray-600 resize-none" 
-      rows="3" 
-      {...props} 
-    />
+    <textarea className="bg-[#111827] border border-[#374151] rounded-xl px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all placeholder-gray-600 resize-none" rows="3" {...props} />
   </div>
-));
+);
 
-const Select = React.memo(({ label, options, ...props }) => (
+const Select = ({ label, options, ...props }) => (
   <div className="flex flex-col gap-1 w-full">
     {label && <label className="text-sm text-gray-400 font-medium">{label}</label>}
-    <select 
-      className="bg-[#111827] border border-[#374151] rounded-xl px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all appearance-none" 
-      {...props}
-    >
+    <select className="bg-[#111827] border border-[#374151] rounded-xl px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all appearance-none" {...props}>
       <option value="">Seleccionar...</option>
       {options.map((opt, i) => {
         const isObj = typeof opt === 'object' && opt !== null;
@@ -177,251 +113,45 @@ const Select = React.memo(({ label, options, ...props }) => (
       })}
     </select>
   </div>
-));
+);
 
-// MODAL DE VIDEO
-const VideoPlayerModal = React.memo(({ videoUrl, onClose }) => {
+const VideoPlayerModal = ({ videoUrl, onClose }) => {
   const embedUrl = getYoutubeEmbedUrl(videoUrl);
   if (!embedUrl) return null;
-
   return (
     <div className="fixed inset-0 bg-black/95 z-[100] flex flex-col items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="w-full max-w-4xl bg-[#111827] rounded-2xl border border-[#374151] overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.5)]">
         <div className="p-4 flex justify-between items-center border-b border-[#374151] bg-[#1f2937]">
-          <h3 className="text-white font-bold flex items-center gap-2">
-            <Youtube className="text-red-500"/> Técnica del Ejercicio
-          </h3>
-          <button 
-            onClick={onClose} 
-            className="text-gray-400 hover:text-white transition-colors bg-[#111827] p-2 rounded-full"
-          >
-            <X size={20}/>
-          </button>
+          <h3 className="text-white font-bold flex items-center gap-2"><Youtube className="text-red-500"/> Técnica del Ejercicio</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors bg-[#111827] p-2 rounded-full"><X size={20}/></button>
         </div>
         <div className="aspect-video w-full bg-black relative">
-          <iframe 
-            width="100%" 
-            height="100%" 
-            src={embedUrl} 
-            title="YouTube video player" 
-            frameBorder="0" 
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
-            referrerPolicy="strict-origin-when-cross-origin"
-            allowFullScreen
-          />
+          <iframe width="100%" height="100%" src={embedUrl} title="YouTube video player" frameBorder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerPolicy="strict-origin-when-cross-origin" allowFullScreen></iframe>
         </div>
       </div>
     </div>
   );
-});
-
-// --- SEEDING INICIAL DE DATOS ---
-const seedDatabase = async (uid) => {
-  try {
-    const usersRef = collection(db, 'artifacts', appId, 'public', 'data', 'users');
-    const snap = await getDocs(usersRef);
-    
-    if (snap.empty) {
-      console.log("Creando base de datos inicial...");
-      const testStudentId = 'test-student-123';
-      
-      await setDoc(doc(usersRef, testStudentId), { 
-        name: 'Yani (Alumna)', 
-        role: 'alumno', 
-        calendarViewDays: 7, 
-        avatarUrl: '', 
-        createdAt: new Date().toISOString() 
-      });
-      
-      await setDoc(doc(usersRef, uid), { 
-        name: 'Nico (Admin)', 
-        role: 'admin', 
-        avatarUrl: '', 
-        createdAt: new Date().toISOString() 
-      });
-
-      const exRef = collection(db, 'artifacts', appId, 'public', 'data', 'exercises');
-      const ex1 = await addDoc(exRef, { 
-        name: 'Sentadilla Libre', 
-        primaryMuscle: 'cuádriceps', 
-        equipment: 'Barra', 
-        videoUrl: 'https://www.youtube.com/watch?v=gcNh17Ckjgg' 
-      });
-      const ex2 = await addDoc(exRef, { 
-        name: 'Press de Banca', 
-        primaryMuscle: 'pecho', 
-        equipment: 'Barra', 
-        videoUrl: 'https://www.youtube.com/watch?v=rxD321l2svE' 
-      });
-      const ex3 = await addDoc(exRef, { 
-        name: 'Dominadas', 
-        primaryMuscle: 'espalda', 
-        equipment: 'Ninguno' 
-      });
-
-      const progRef = collection(db, 'artifacts', appId, 'public', 'data', 'programs');
-      
-      await addDoc(progRef, {
-        name: 'Workout: FullBody Express', 
-        description: 'Rutina rápida de 1 solo día.',
-        isTemplate: true, 
-        programType: 'workout', 
-        creatorId: uid, 
-        createdAt: new Date().toISOString(), 
-        weeks: 1,
-        days: [{
-          id: '0', 
-          name: 'FullBody A', 
-          blocks: [{
-            id: 101, 
-            name: 'BLOQUE 1', 
-            exercises: [{
-              exerciseId: ex1.id, 
-              name: 'Sentadilla Libre', 
-              sets: '3', 
-              reps: '10', 
-              rest: '90s', 
-              kg: '', 
-              rpe: '7' 
-            }] 
-          }] 
-        }]
-      });
-
-      await addDoc(progRef, {
-        name: 'Plantilla: Fuerza 2 Semanas', 
-        description: 'Mesociclo de adaptación.',
-        isTemplate: true, 
-        programType: 'program', 
-        creatorId: uid, 
-        createdAt: new Date().toISOString(), 
-        weeks: 2,
-        days: [
-          { 
-            id: '0', 
-            name: 'Día 1 - Piernas', 
-            blocks: [{
-              id: 101, 
-              name: 'FUERZA', 
-              exercises: [{
-                exerciseId: ex1.id, 
-                name: 'Sentadilla Libre', 
-                sets: '4', 
-                reps: '8', 
-                rest: '120s' 
-              }] 
-            }] 
-          },
-          { 
-            id: '2', 
-            name: 'Día 2 - Pecho', 
-            blocks: [{
-              id: 102, 
-              name: 'FUERZA', 
-              exercises: [{
-                exerciseId: ex2.id, 
-                name: 'Press de Banca', 
-                sets: '4', 
-                reps: '8', 
-                rest: '120s' 
-              }] 
-            }] 
-          }
-        ]
-      });
-
-      const today = new Date();
-      const yesterday = new Date(today); 
-      yesterday.setDate(yesterday.getDate() - 1);
-      const tomorrow = new Date(today); 
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      const formatDate = (d) => d.toISOString().split('T')[0];
-
-      await addDoc(progRef, {
-        name: 'Mesociclo de Yani', 
-        description: 'Enfoque en básicos pesados.',
-        assignedTo: testStudentId, 
-        isTemplate: false, 
-        programType: 'program', 
-        creatorId: uid, 
-        createdAt: new Date().toISOString(),
-        assignedDates: { 
-          'day-1': formatDate(yesterday), 
-          'day-2': formatDate(today), 
-          'day-3': formatDate(tomorrow) 
-        },
-        days: [
-          { 
-            id: 'day-1', 
-            name: 'Día 1: Empuje', 
-            blocks: [{
-              id: 101, 
-              name: 'FUERZA', 
-              exercises: [{
-                exerciseId: ex2.id, 
-                name: 'Press de Banca', 
-                sets: '4', 
-                reps: '5', 
-                rest: '120s', 
-                kg: '40', 
-                rpe: '8' 
-              }] 
-            }] 
-          },
-          { 
-            id: 'day-2', 
-            name: 'Día 2: Tirón (HOY)', 
-            blocks: [{
-              id: 201, 
-              name: 'HIPERTROFIA', 
-              exercises: [{
-                exerciseId: ex3.id, 
-                name: 'Dominadas', 
-                sets: '3', 
-                reps: '8', 
-                rest: '90s', 
-                kg: '', 
-                rpe: '8' 
-              }] 
-            }] 
-          },
-          { 
-            id: 'day-3', 
-            name: 'Día 3: Piernas', 
-            blocks: [{
-              id: 301, 
-              name: 'BÁSICO INFERIOR', 
-              exercises: [{
-                exerciseId: ex1.id, 
-                name: 'Sentadilla Libre', 
-                sets: '5', 
-                reps: '10', 
-                rest: '120s', 
-                kg: '60', 
-                rpe: '8' 
-              }] 
-            }] 
-          }
-        ]
-      });
-
-      const msgRef = collection(db, 'artifacts', appId, 'public', 'data', 'messages');
-      await addDoc(msgRef, { 
-        roomId: testStudentId, 
-        senderId: uid, 
-        senderName: 'Nico (Admin)', 
-        text: '¡Hola Yani! Ya tenés la planificación armada. ¡Con todo!', 
-        timestamp: new Date().toISOString() 
-      });
-    }
-  } catch (error) { 
-    console.error("Error en el seeding inicial:", error); 
-  }
 };
 
-// --- APP PRINCIPAL OPTIMIZADO ---
+const Modal = ({ isOpen, onClose, title, children }) => {
+  if (!isOpen) return null;
+  return (
+      <div className="fixed inset-0 bg-black/90 z-[100] flex items-center justify-center p-4 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-[#1f2937] w-full max-w-2xl rounded-3xl border border-gray-700 shadow-2xl my-8 relative">
+              <div className="p-6 border-b border-gray-700 flex justify-between items-center bg-[#1f2937] rounded-t-3xl sticky top-0 z-10">
+                  <h3 className="text-xl font-black text-white uppercase italic">{title}</h3>
+                  <button onClick={onClose} className="p-2 bg-gray-800 text-gray-400 hover:text-white rounded-full"><X size={24}/></button>
+              </div>
+              <div className="p-6">{children}</div>
+          </div>
+      </div>
+  );
+};
+
+// --- APP PRINCIPAL (CONTENEDOR) ---
 export default function App() {
   const [user, setUser] = useState(null);
+  const [currentUserData, setCurrentUserData] = useState(null); 
   const [users, setUsers] = useState([]);
   const [exercises, setExercises] = useState([]);
   const [programs, setPrograms] = useState([]);
@@ -429,99 +159,41 @@ export default function App() {
   const [messages, setMessages] = useState([]);
   
   const [currentView, setCurrentView] = useState('dashboard');
-  const [myRole, setMyRole] = useState(null); 
-  const [customUserId, setCustomUserId] = useState(null); 
-  
   const [viewingStudentId, setViewingStudentId] = useState(null);
   const [editingProgram, setEditingProgram] = useState(null);
   const [dayBuilderConfig, setDayBuilderConfig] = useState(null);
-
-  const currentUserId = customUserId || user?.uid;
+  const [activeSession, setActiveSession] = useState(null);
   
-  // ✅ MEMOIZAR datos derivados
-  const currentUserData = useMemo(() => 
-    users.find(u => u.id === currentUserId) || { 
-      role: myRole, 
-      name: 'Usuario', 
-      calendarViewDays: 7, 
-      avatarUrl: '' 
-    },
-    [users, currentUserId, myRole]
-  );
+  const [authLoading, setAuthLoading] = useState(true);
 
-  // ✅ USAR useCallback para handlers
-  const handleSetRole = useCallback(async (role, name, isTestStudent = false) => {
-    if (!user) return;
-    try {
-      if (isTestStudent) {
-        setCustomUserId('test-student-123');
-        setMyRole('alumno');
-      } else {
-        setMyRole(role);
-        await setDoc(
-          doc(db, 'artifacts', appId, 'public', 'data', 'users', user.uid),
-          { name, role, calendarViewDays: 7, avatarUrl: '', createdAt: new Date().toISOString() },
-          { merge: true }
-        );
-      }
-    } catch (error) {
-      console.error("Error setting role:", error);
-    }
-  }, [user]);
-
-  const handleAvatarUpload = useCallback(async (e) => {
-    const file = e.target.files[0];
-    if (!file || !currentUserId) return;
-    
-    try {
-      const base64 = await compressImage(file, 400);
-      await setDoc(
-        doc(db, 'artifacts', appId, 'public', 'data', 'users', currentUserId),
-        { avatarUrl: base64 },
-        { merge: true }
-      );
-    } catch (error) {
-      console.error("Error uploading avatar:", error);
-    }
-  }, [currentUserId]);
-
-  // ✅ AUTH con cleanup
   useEffect(() => {
-    let cancelled = false;
-    
-    const initAuth = async () => {
-      try {
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await signInWithCustomToken(auth, __initial_auth_token);
-        } else {
-          await signInAnonymously(auth);
-        }
-      } catch (error) {
-        if (!cancelled) {
-          console.error("Error Auth:", error);
-        }
-      }
-    };
-    
-    initAuth();
-    
     const unsubscribe = onAuthStateChanged(auth, async (u) => {
-      if (!cancelled) {
-        setUser(u);
-        if (u) await seedDatabase(u.uid);
-      }
+      setUser(u);
+      setAuthLoading(false);
     });
-    
-    return () => {
-      cancelled = true;
-      unsubscribe();
-    };
+    return () => unsubscribe();
   }, []);
 
-  // ✅ LISTENERS de Firebase con cleanup y manejo de errores
   useEffect(() => {
     if (!user) return;
-    
+
+    const userRef = doc(db, 'artifacts', appId, 'public', 'data', 'users', user.uid);
+    const unsubProfile = onSnapshot(userRef, (snap) => {
+      if (snap.exists()) {
+        setCurrentUserData({ id: snap.id, ...snap.data() });
+      } else {
+        const role = user.email === 'nfarias.entrenador@gmail.com' ? 'admin' : 'alumno';
+        setDoc(userRef, {
+          name: user.email ? user.email.split('@')[0] : 'Usuario',
+          email: user.email ? user.email.toLowerCase() : '',
+          role: role,
+          calendarViewDays: 7,
+          avatarUrl: '',
+          createdAt: new Date().toISOString()
+        });
+      }
+    }, console.error);
+
     const paths = {
       users: collection(db, 'artifacts', appId, 'public', 'data', 'users'),
       exercises: collection(db, 'artifacts', appId, 'public', 'data', 'exercises'),
@@ -530,68 +202,31 @@ export default function App() {
       messages: collection(db, 'artifacts', appId, 'public', 'data', 'messages'),
     };
 
-    const unsubUsers = onSnapshot(
-      paths.users,
-      (snap) => setUsers(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
-      (error) => console.error("Error users snapshot:", error)
-    );
-    
-    const unsubExer = onSnapshot(
-      paths.exercises,
-      (snap) => {
-        const exs = snap.docs
-          .map(d => ({ id: d.id, ...d.data() }))
-          .sort((a, b) => a.name.localeCompare(b.name));
-        setExercises(exs);
-      },
-      (error) => console.error("Error exercises snapshot:", error)
-    );
-    
-    const unsubProg = onSnapshot(
-      paths.programs,
-      (snap) => setPrograms(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
-      (error) => console.error("Error programs snapshot:", error)
-    );
-    
-    const unsubLogs = onSnapshot(
-      paths.logs,
-      (snap) => setWorkoutLogs(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
-      (error) => console.error("Error logs snapshot:", error)
-    );
-    
-    const unsubMsgs = onSnapshot(
-      paths.messages,
-      (snap) => {
-        const msgs = snap.docs
-          .map(d => ({ id: d.id, ...d.data() }))
-          .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-        setMessages(msgs);
-      },
-      (error) => console.error("Error messages snapshot:", error)
-    );
+    const unsubUsers = onSnapshot(paths.users, (snap) => setUsers(snap.docs.map(d => ({ id: d.id, ...d.data() }))), console.error);
+    const unsubExer = onSnapshot(paths.exercises, (snap) => {
+      const exs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      exs.sort((a,b) => a.name.localeCompare(b.name));
+      setExercises(exs);
+    }, console.error);
+    const unsubProg = onSnapshot(paths.programs, (snap) => setPrograms(snap.docs.map(d => ({ id: d.id, ...d.data() }))), console.error);
+    const unsubLogs = onSnapshot(paths.logs, (snap) => setWorkoutLogs(snap.docs.map(d => ({ id: d.id, ...d.data() }))), console.error);
+    const unsubMsgs = onSnapshot(paths.messages, (snap) => setMessages(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => new Date(a.timestamp) - new Date(b.timestamp))), console.error);
 
-    return () => {
-      unsubUsers();
-      unsubExer();
-      unsubProg();
-      unsubLogs();
-      unsubMsgs();
-    };
+    return () => { unsubProfile(); unsubUsers(); unsubExer(); unsubProg(); unsubLogs(); unsubMsgs(); };
   }, [user]);
 
-  if (!user) {
-    return (
-      <div className="min-h-[100dvh] bg-[#111827] text-white flex items-center justify-center">
-        Cargando Coronados de Gloria...
-      </div>
-    );
-  }
-  
-  if (!currentUserData.role && !myRole) {
-    return <RoleSelector onSelect={handleSetRole} />;
-  }
+  const handleAvatarUpload = async (e) => {
+    const file = e.target.files[0];
+    if(!file || !user?.uid) return;
+    const base64 = await compressImage(file, 400); 
+    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', user.uid), { avatarUrl: base64 }, { merge: true });
+  };
 
-  const role = currentUserData.role || myRole;
+  if (authLoading) return <div className="min-h-[100dvh] bg-[#111827] text-amber-500 flex items-center justify-center font-bold text-xl"><Activity className="animate-spin mr-3"/> Cargando Coronados de Gloria...</div>;
+  if (!user) return <LoginScreen db={db} appId={appId} auth={auth} />;
+  if (!currentUserData) return <div className="min-h-[100dvh] bg-[#111827] text-white flex items-center justify-center font-bold text-xl"><Activity className="animate-spin mr-3 text-amber-500"/> Sincronizando perfil...</div>;
+
+  const role = currentUserData.role;
 
   const navItems = [
     { id: 'dashboard', label: 'Inicio', icon: Activity, roles: ['admin', 'profesor', 'alumno'] },
@@ -603,135 +238,78 @@ export default function App() {
 
   const filteredNav = navItems.filter(item => item.roles.includes(role));
 
-  return (
-    <div className="min-h-[100dvh] flex flex-col md:flex-row bg-[#111827] text-gray-100 font-sans selection:bg-amber-500/30">
-      
-      {/* SIDEBAR */}
-      <aside className="w-full md:w-64 bg-[#1f2937] border-b md:border-b-0 md:border-r border-[#374151] flex flex-col items-center md:items-start overflow-y-auto shrink-0 z-30 relative">
-        <div className="w-full bg-[#111827]/50 p-4 border-b border-[#374151] flex flex-col items-center relative group">
-          <label className="relative w-20 h-20 rounded-full overflow-hidden border-2 border-amber-500 cursor-pointer mb-2 block shadow-lg">
-            <img 
-              src={currentUserData.avatarUrl || DEFAULT_AVATAR} 
-              alt="Avatar" 
-              className="w-full h-full object-cover" 
-            />
-            <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-              <Camera size={20} className="text-white" />
-            </div>
-            <input 
-              type="file" 
-              accept="image/*" 
-              className="hidden" 
-              onChange={handleAvatarUpload} 
-            />
-          </label>
-          <p className="font-bold text-white text-center truncate w-full px-2">
-            {currentUserData.name}
-          </p>
-          <p className="text-xs text-amber-500 uppercase tracking-widest font-black">
-            {role}
-          </p>
-        </div>
+  const renderContent = () => {
+      if (activeSession) return <ActiveWorkoutSession session={activeSession} exercisesList={exercises} db={db} appId={appId} userId={user.uid} onClose={()=>setActiveSession(null)} />;
 
-        <nav className="flex-1 w-full flex md:flex-col gap-2 p-4 overflow-x-auto md:overflow-x-visible hide-scrollbar snap-x">
-          {filteredNav.map(item => {
-            const Icon = item.icon;
-            return (
-              <button 
-                key={item.id} 
-                onClick={() => { 
-                  setCurrentView(item.id); 
-                  setViewingStudentId(null); 
-                  setEditingProgram(null); 
-                  setDayBuilderConfig(null); 
-                }}
-                className={`flex-shrink-0 md:w-full flex items-center justify-center md:justify-start gap-3 px-4 py-3 rounded-xl transition-all snap-center ${
-                  currentView === item.id && !viewingStudentId 
-                    ? 'bg-amber-500 text-gray-900 font-bold shadow-[0_0_15px_rgba(245,158,11,0.2)]' 
-                    : 'text-gray-400 hover:bg-[#374151] hover:text-white bg-[#111827] md:bg-transparent'
-                }`}
-              >
-                <Icon size={20} /> 
-                <span className="md:block">{item.label}</span>
-              </button>
-            );
-          })}
-        </nav>
-      </aside>
-
-      {/* CONTENIDO PRINCIPAL */}
-      <main className="flex-1 p-4 md:p-8 pb-32 md:pb-8 h-[100dvh] md:max-h-screen overflow-y-auto relative">
-        <div className="max-w-5xl mx-auto">
-          
-          {currentView === 'dashboard' && role === 'alumno' && (
-            <StudentHomeView 
-              currentUserData={currentUserData} 
-              programs={programs} 
-              onGoToCalendar={() => setCurrentView('student_calendar')} 
-              workoutLogs={workoutLogs} 
-            />
-          )}
-
-          {currentView === 'dashboard' && role !== 'alumno' && (
-            <AdminDashboardView 
-              users={users} 
-              programs={programs} 
-              onGoToLibrary={() => setCurrentView('library')} 
-            />
-          )}
-          
-          {currentView === 'student_calendar' && role === 'alumno' && (
-            <StudentCalendarView 
-              programs={programs} 
-              currentUserId={currentUserId} 
-              currentUserData={currentUserData} 
-              exercises={exercises} 
-              workoutLogs={workoutLogs} 
-            />
-          )}
-
-          {currentView === 'admin_planner' && role !== 'alumno' && viewingStudentId && (
-            <AdminMonthlyPlanner 
-              studentId={viewingStudentId} 
-              users={users} 
-              programs={programs} 
-              workoutLogs={workoutLogs} 
-              exercises={exercises}
-              onClose={() => { 
-                setViewingStudentId(null); 
-                setCurrentView('users'); 
+      if (currentView === 'day_builder' && dayBuilderConfig) {
+          return <DayMicroBuilder 
+              programData={editingProgram} relativeDayId={dayBuilderConfig.relativeDayId} targetDate={dayBuilderConfig.targetDate}
+              exercises={exercises} workoutLogs={workoutLogs} studentId={editingProgram?.assignedTo}
+              libraryPrograms={programs.filter(p => p.isTemplate)}
+              onSaveToLibrary={async (workoutProg) => { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'programs'), { ...workoutProg, creatorId: user.uid }); }}
+              onSaveDay={async (updatedProgramData) => {
+                if (dayBuilderConfig.sourceContext === 'admin_planner') {
+                  let progToSave = { ...updatedProgramData };
+                  if (dayBuilderConfig.targetDate && !progToSave.id) {
+                    progToSave.assignedDates = { [dayBuilderConfig.relativeDayId]: dayBuilderConfig.targetDate };
+                    progToSave.createdAt = new Date().toISOString();
+                    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'programs'), progToSave);
+                  } else {
+                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'programs', progToSave.id), { ...progToSave, updatedAt: new Date().toISOString() }, { merge: true });
+                  }
+                  setDayBuilderConfig(null); setEditingProgram(null); setCurrentView('admin_planner');
+                } else if (dayBuilderConfig.sourceContext === 'library') {
+                  const progToSave = { ...updatedProgramData, isTemplate: true, programType: 'workout' };
+                  if (progToSave.id) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'programs', progToSave.id), { ...progToSave, updatedAt: new Date().toISOString() }, { merge: true });
+                  else await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'programs'), { ...progToSave, creatorId: user.uid, createdAt: new Date().toISOString() });
+                  setDayBuilderConfig(null); setEditingProgram(null); setCurrentView('library');
+                } else {
+                  setEditingProgram(updatedProgramData);
+                  setDayBuilderConfig(null);
+                  setCurrentView('macro_builder');
+                }
               }}
-              onUpdateDays={async (days) => { 
-                await setDoc(
-                  doc(db, 'artifacts', appId, 'public', 'data', 'users', viewingStudentId), 
-                  { calendarViewDays: Number(days) }, 
-                  { merge: true }
-                ); 
+              onCancel={() => {
+                if (dayBuilderConfig.sourceContext === 'admin_planner') { setDayBuilderConfig(null); setEditingProgram(null); setCurrentView('admin_planner'); }
+                else if (dayBuilderConfig.sourceContext === 'library') { setDayBuilderConfig(null); setEditingProgram(null); setCurrentView('library'); }
+                else { setDayBuilderConfig(null); setCurrentView('macro_builder'); }
               }}
+          />
+      }
+
+      if (currentView === 'macro_builder') {
+          return <ProgramMacroBuilder
+              initialProgram={editingProgram}
+              onOpenDayBuilder={(programData, relDayId) => {
+                setEditingProgram(programData); 
+                setDayBuilderConfig({ relativeDayId: relDayId, sourceContext: 'macro_builder' });
+                setCurrentView('day_builder');
+              }}
+              onSave={async (progData) => {
+                if (progData.id) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'programs', progData.id), { ...progData, updatedAt: new Date().toISOString() }, { merge: true });
+                else await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'programs'), { ...progData, creatorId: user.uid, createdAt: new Date().toISOString() });
+                setEditingProgram(null); setCurrentView('library');
+              }}
+              onCancel={() => { setEditingProgram(null); setCurrentView('library'); }}
+          />
+      }
+
+      if (currentView === 'admin_planner' && role !== 'alumno' && viewingStudentId) {
+          return <AdminMonthlyPlanner 
+              studentId={viewingStudentId} users={users} programs={programs} workoutLogs={workoutLogs} exercisesList={exercises} db={db} appId={appId}
+              onClose={() => { setViewingStudentId(null); setCurrentView('users'); }}
+              onUpdateDays={async (days) => { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', viewingStudentId), { calendarViewDays: Number(days) }, { merge: true }); }}
               onCreateRoutine={(date) => { 
-                setEditingProgram({ 
-                  name: `Entrenamiento`, 
-                  isTemplate: false, 
-                  programType: 'workout', 
-                  assignedTo: viewingStudentId, 
-                  weeks: 1, 
-                  days: [] 
-                });
-                setDayBuilderConfig({ 
-                  targetDate: date, 
-                  relativeDayId: '0', 
-                  sourceContext: 'admin_planner' 
-                }); 
+                setEditingProgram({ name: `Entrenamiento`, isTemplate: false, programType: 'workout', assignedTo: viewingStudentId, weeks: 1, days: [] });
+                setDayBuilderConfig({ targetDate: date, relativeDayId: '0', sourceContext: 'admin_planner' }); 
                 setCurrentView('day_builder'); 
               }}
               onAssignFromLibrary={async (templateProg, date) => {
                 const assignedDates = {};
                 templateProg.days.forEach(day => {
-                  const targetDate = createDate(date);
-                  if (targetDate) {
-                    targetDate.setDate(targetDate.getDate() + parseInt(day.id));
-                    assignedDates[day.id] = targetDate.toISOString().split('T')[0];
-                  }
+                  const targetDate = new Date(date + 'T00:00:00');
+                  targetDate.setDate(targetDate.getDate() + parseInt(day.id));
+                  assignedDates[day.id] = targetDate.toISOString().split('T')[0];
                 });
                 const newProg = deepCopy(templateProg);
                 newProg.isTemplate = false;
@@ -746,608 +324,458 @@ export default function App() {
                 setDayBuilderConfig({ relativeDayId: dayId, sourceContext: 'admin_planner' });
                 setCurrentView('day_builder');
               }}
-            />
-          )}
+          />
+      }
 
-          {currentView === 'library' && role !== 'alumno' && (
-            <LibraryView 
-              exercises={exercises} 
-              programs={programs} 
-              onGoToMacroBuilder={(prog) => { 
-                setEditingProgram(
-                  prog 
-                    ? deepCopy(prog) 
-                    : { 
-                        name: '', 
-                        description: '', 
-                        programType: 'program', 
-                        weeks: 4, 
-                        days: [], 
-                        isTemplate: true 
-                      }
-                ); 
-                setCurrentView('macro_builder'); 
-              }} 
-              onGoToMicroBuilder={(workout) => {
-                setEditingProgram(
-                  workout 
-                    ? deepCopy(workout) 
-                    : { 
-                        name: '', 
-                        description: '', 
-                        programType: 'workout', 
-                        weeks: 1, 
-                        days: [], 
-                        isTemplate: true 
-                      }
-                );
-                setDayBuilderConfig({ relativeDayId: '0', sourceContext: 'library' });
-                setCurrentView('day_builder');
-              }}
-            />
-          )}
+      switch(currentView) {
+          case 'dashboard':
+              if (role === 'alumno') return <StudentHomeView currentUserData={currentUserData} programs={programs} onGoToCalendar={() => setCurrentView('student_calendar')} startSession={setActiveSession} />;
+              return <AdminDashboardView users={users} programs={programs} onGoToLibrary={() => setCurrentView('library')} />;
+          case 'student_calendar':
+              if (role === 'alumno') return <StudentCalendarView programs={programs} currentUserId={user.uid} workoutLogs={workoutLogs} startSession={setActiveSession} />;
+              break;
+          case 'library':
+              if (role !== 'alumno') return <LibraryView 
+                  exercises={exercises} programs={programs} db={db} appId={appId}
+                  onGoToMacroBuilder={(prog) => { 
+                    setEditingProgram(prog ? deepCopy(prog) : { name: '', description: '', programType: 'program', weeks: 4, days: [], isTemplate: true }); 
+                    setCurrentView('macro_builder'); 
+                  }} 
+                  onGoToMicroBuilder={(workout) => {
+                    setEditingProgram(workout ? deepCopy(workout) : { name: '', description: '', programType: 'workout', weeks: 1, days: [], isTemplate: true });
+                    setDayBuilderConfig({ relativeDayId: '0', sourceContext: 'library' });
+                    setCurrentView('day_builder');
+                  }}
+              />;
+              break;
+          case 'users':
+              if (role !== 'alumno') return <UsersManagement users={users} onViewPlanner={(uid) => { setViewingStudentId(uid); setCurrentView('admin_planner'); }} />;
+              break;
+          case 'chat':
+              return <ChatView currentUserData={currentUserData} currentUserId={user.uid} role={role} users={users} messages={messages} db={db} appId={appId} />;
+      }
+      return <div>Vista no encontrada</div>;
+  };
 
-          {currentView === 'chat' && (
-            <ChatView 
-              currentUserData={currentUserData} 
-              currentUserId={currentUserId} 
-              role={role} 
-              users={users} 
-              messages={messages} 
-            />
-          )}
+  return (
+    <div className="min-h-[100dvh] flex flex-col md:flex-row bg-[#111827] text-gray-100 font-sans selection:bg-amber-500/30">
+      
+      {/* SIDEBAR */}
+      <aside className="w-full md:w-64 bg-[#1f2937] border-b md:border-b-0 md:border-r border-[#374151] flex flex-col items-center md:items-start overflow-y-auto shrink-0 z-30 relative">
+        <div className="w-full bg-[#111827]/50 p-4 border-b border-[#374151] flex flex-col items-center relative group">
+          <label className="relative w-20 h-20 rounded-full overflow-hidden border-2 border-amber-500 cursor-pointer mb-2 block shadow-lg">
+            <img src={currentUserData.avatarUrl || DEFAULT_AVATAR} alt="Avatar" className="w-full h-full object-cover" />
+            <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><Camera size={20} className="text-white" /></div>
+            <input type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
+          </label>
+          <p className="font-bold text-white text-center truncate w-full px-2">{currentUserData.name}</p>
+          <p className="text-xs text-amber-500 uppercase tracking-widest font-black">{role}</p>
+        </div>
 
-          {currentView === 'macro_builder' && (
-            <ProgramMacroBuilder
-              initialProgram={editingProgram}
-              onOpenDayBuilder={(programData, relDayId) => {
-                setEditingProgram(programData); 
-                setDayBuilderConfig({ 
-                  relativeDayId: relDayId, 
-                  sourceContext: 'macro_builder' 
-                });
-                setCurrentView('day_builder');
-              }}
-              onSave={async (progData) => {
-                try {
-                  if (progData.id) {
-                    await setDoc(
-                      doc(db, 'artifacts', appId, 'public', 'data', 'programs', progData.id), 
-                      { ...progData, updatedAt: new Date().toISOString() }, 
-                      { merge: true }
-                    );
-                  } else {
-                    await addDoc(
-                      collection(db, 'artifacts', appId, 'public', 'data', 'programs'), 
-                      { ...progData, creatorId: user.uid, createdAt: new Date().toISOString() }
-                    );
-                  }
-                  setEditingProgram(null); 
-                  setCurrentView('library');
-                } catch (error) {
-                  console.error("Error saving program:", error);
-                }
-              }}
-              onCancel={() => { 
-                setEditingProgram(null); 
-                setCurrentView('library'); 
-              }}
-            />
-          )}
+        <nav className="flex-1 w-full flex md:flex-col gap-2 p-4 overflow-x-auto md:overflow-x-visible hide-scrollbar snap-x">
+          {filteredNav.map(item => {
+            const Icon = item.icon;
+            return (
+              <button key={item.id} onClick={() => { setCurrentView(item.id); setViewingStudentId(null); setEditingProgram(null); setDayBuilderConfig(null); }}
+                className={`flex-shrink-0 md:w-full flex items-center justify-center md:justify-start gap-3 px-4 py-3 rounded-xl transition-all snap-center ${
+                  currentView === item.id && !viewingStudentId ? 'bg-amber-500 text-gray-900 font-bold shadow-[0_0_15px_rgba(245,158,11,0.2)]' : 'text-gray-400 hover:bg-[#374151] hover:text-white bg-[#111827] md:bg-transparent'
+                }`}>
+                <Icon size={20} /> <span className="md:block">{item.label}</span>
+              </button>
+            );
+          })}
+          <button onClick={() => signOut(auth)} className="flex-shrink-0 md:w-full flex items-center justify-center md:justify-start gap-3 px-4 py-3 rounded-xl transition-all text-red-400 hover:bg-red-500/10 hover:text-red-300 md:mt-auto md:mb-4 snap-center">
+            <LogOut size={20} /> <span className="md:block">Cerrar Sesión</span>
+          </button>
+        </nav>
+      </aside>
 
-          {currentView === 'day_builder' && dayBuilderConfig && (
-            <DayMicroBuilder 
-              programData={editingProgram}
-              relativeDayId={dayBuilderConfig.relativeDayId}
-              targetDate={dayBuilderConfig.targetDate}
-              exercises={exercises}
-              workoutLogs={workoutLogs}
-              studentId={editingProgram?.assignedTo}
-              libraryPrograms={programs.filter(p => p.isTemplate)}
-              onSaveToLibrary={async (workoutProg) => {
-                try {
-                  await addDoc(
-                    collection(db, 'artifacts', appId, 'public', 'data', 'programs'), 
-                    { ...workoutProg, creatorId: user.uid }
-                  );
-                } catch (error) {
-                  console.error("Error saving to library:", error);
-                }
-              }}
-              onSaveDay={async (updatedProgramData) => {
-                try {
-                  if (dayBuilderConfig.sourceContext === 'admin_planner') {
-                    let progToSave = { ...updatedProgramData };
-                    if (dayBuilderConfig.targetDate && !progToSave.id) {
-                      progToSave.assignedDates = { 
-                        [dayBuilderConfig.relativeDayId]: dayBuilderConfig.targetDate 
-                      };
-                      progToSave.createdAt = new Date().toISOString();
-                      await addDoc(
-                        collection(db, 'artifacts', appId, 'public', 'data', 'programs'), 
-                        progToSave
-                      );
-                    } else {
-                      await setDoc(
-                        doc(db, 'artifacts', appId, 'public', 'data', 'programs', progToSave.id), 
-                        { ...progToSave, updatedAt: new Date().toISOString() }, 
-                        { merge: true }
-                      );
-                    }
-                    setDayBuilderConfig(null); 
-                    setEditingProgram(null); 
-                    setCurrentView('admin_planner');
-                  } else if (dayBuilderConfig.sourceContext === 'library') {
-                    const progToSave = { ...updatedProgramData, isTemplate: true, programType: 'workout' };
-                    if (progToSave.id) {
-                      await setDoc(
-                        doc(db, 'artifacts', appId, 'public', 'data', 'programs', progToSave.id), 
-                        { ...progToSave, updatedAt: new Date().toISOString() }, 
-                        { merge: true }
-                      );
-                    } else {
-                      await addDoc(
-                        collection(db, 'artifacts', appId, 'public', 'data', 'programs'), 
-                        { ...progToSave, creatorId: user.uid, createdAt: new Date().toISOString() }
-                      );
-                    }
-                    setDayBuilderConfig(null); 
-                    setEditingProgram(null); 
-                    setCurrentView('library');
-                  } else {
-                    setEditingProgram(updatedProgramData);
-                    setDayBuilderConfig(null);
-                    setCurrentView('macro_builder');
-                  }
-                } catch (error) {
-                  console.error("Error saving day:", error);
-                }
-              }}
-              onCancel={() => {
-                if (dayBuilderConfig.sourceContext === 'admin_planner') { 
-                  setDayBuilderConfig(null); 
-                  setEditingProgram(null); 
-                  setCurrentView('admin_planner'); 
-                } else if (dayBuilderConfig.sourceContext === 'library') { 
-                  setDayBuilderConfig(null); 
-                  setEditingProgram(null); 
-                  setCurrentView('library'); 
-                } else { 
-                  setDayBuilderConfig(null); 
-                  setCurrentView('macro_builder'); 
-                }
-              }}
-            />
-          )}
-          
-          {currentView === 'users' && (
-            <UsersManagement 
-              users={users} 
-              onViewPlanner={(uid) => { 
-                setViewingStudentId(uid); 
-                setCurrentView('admin_planner'); 
-              }} 
-            />
-          )}
+      {/* CONTENIDO PRINCIPAL */}
+      <main className="flex-1 p-4 md:p-8 pb-32 md:pb-8 h-[100dvh] md:max-h-screen overflow-y-auto relative">
+        <div className="max-w-5xl mx-auto">
+            {renderContent()}
         </div>
       </main>
     </div>
   );
 }
 
-// ===== COMPONENTES FALTANTES IMPLEMENTADOS =====
+// --- PANTALLA DE LOGIN ---
+function LoginScreen({ db, appId, auth }) {
+  const [isLogin, setIsLogin] = useState(true);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-// ✅ VISTA HOME DEL ALUMNO
-function StudentHomeView({ currentUserData, programs, onGoToCalendar, workoutLogs }) {
-  const today = new Date().toISOString().split('T')[0];
-  
-  const myPrograms = useMemo(
-    () => programs.filter(p => p.assignedTo === currentUserData.id && !p.isTemplate),
-    [programs, currentUserData.id]
-  );
-  
-  const todayRoutines = useMemo(() => {
-    const routines = [];
-    myPrograms.forEach(prog => {
-      if (prog.assignedDates) {
-        Object.keys(prog.assignedDates).forEach(dayId => {
-          if (prog.assignedDates[dayId] === today) {
-            const day = prog.days?.find(d => d.id === dayId);
-            if (day) routines.push({ program: prog, day });
-          }
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
+    try {
+      if (isLogin) {
+        await signInWithEmailAndPassword(auth, email, password);
+      } else {
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        const newUser = userCredential.user;
+        
+        let assignedRole = 'alumno';
+        if (email.toLowerCase() === 'nfarias.entrenador@gmail.com') {
+          assignedRole = 'admin';
+        }
+
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', newUser.uid), {
+          name: name || email.split('@')[0],
+          email: email.toLowerCase(),
+          role: assignedRole,
+          calendarViewDays: 7,
+          avatarUrl: '',
+          createdAt: new Date().toISOString()
         });
       }
-    });
-    return routines;
-  }, [myPrograms, today]);
-
-  const recentLogs = useMemo(
-    () => workoutLogs
-      .filter(l => l.studentId === currentUserData.id)
-      .sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt))
-      .slice(0, 5),
-    [workoutLogs, currentUserData.id]
-  );
-
-  const totalWorkouts = workoutLogs.filter(l => l.studentId === currentUserData.id).length;
-  const thisWeekWorkouts = workoutLogs.filter(l => {
-    if (l.studentId !== currentUserData.id) return false;
-    const logDate = new Date(l.date);
-    const weekAgo = new Date();
-    weekAgo.setDate(weekAgo.getDate() - 7);
-    return logDate >= weekAgo;
-  }).length;
+    } catch (err) {
+      console.error(err);
+      if (err.code === 'auth/email-already-in-use') setError('Este correo ya está registrado. Intentá iniciar sesión.');
+      else if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') setError('Correo o contraseña incorrectos.');
+      else if (err.code === 'auth/user-not-found') setError('No existe una cuenta con ese correo.');
+      else if (err.code === 'auth/weak-password') setError('La contraseña debe tener al menos 6 caracteres.');
+      else setError('Ocurrió un error. Revisá los datos y volvé a intentar.');
+    }
+    setLoading(false);
+  };
 
   return (
-    <div className="space-y-6">
-      <header className="mb-8">
-        <h2 className="text-3xl font-bold text-white mb-2">
-          ¡Hola {currentUserData.name}! 💪
-        </h2>
-        <p className="text-gray-400">
-          {todayRoutines.length > 0 
-            ? `Tenés ${todayRoutines.length} entrenamiento${todayRoutines.length > 1 ? 's' : ''} planificado${todayRoutines.length > 1 ? 's' : ''} para hoy`
-            : 'No tenés entrenamientos planificados para hoy'
-          }
-        </p>
-      </header>
-
-      {/* ESTADÍSTICAS */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="p-6 border-l-4 border-l-emerald-500">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-emerald-500/10 rounded-xl">
-              <TrendingUp size={24} className="text-emerald-500" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-400">Esta Semana</p>
-              <p className="text-2xl font-bold text-white">{thisWeekWorkouts}</p>
-            </div>
-          </div>
-        </Card>
-
-        <Card className="p-6 border-l-4 border-l-amber-500">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-amber-500/10 rounded-xl">
-              <Dumbbell size={24} className="text-amber-500" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-400">Total Entrenos</p>
-              <p className="text-2xl font-bold text-white">{totalWorkouts}</p>
-            </div>
-          </div>
-        </Card>
-
-        <Card className="p-6 border-l-4 border-l-[#74ACDF]">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-[#74ACDF]/10 rounded-xl">
-              <CalendarDays size={24} className="text-[#74ACDF]" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-400">Programas Activos</p>
-              <p className="text-2xl font-bold text-white">{myPrograms.length}</p>
-            </div>
-          </div>
-        </Card>
-      </div>
-
-      {/* ENTRENAMIENTO DE HOY */}
-      {todayRoutines.length > 0 && (
-        <Card className="p-6 border-2 border-amber-500/30">
-          <div className="flex justify-between items-start mb-4">
-            <div>
-              <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                <Zap className="text-amber-500" size={24} />
-                Entrenamiento de Hoy
-              </h3>
-              <p className="text-sm text-gray-400 mt-1">
-                {new Date().toLocaleDateString('es-AR', { 
-                  weekday: 'long', 
-                  day: 'numeric', 
-                  month: 'long' 
-                })}
-              </p>
-            </div>
-            <Button 
-              onClick={onGoToCalendar} 
-              variant="primary" 
-              className="shadow-[0_0_20px_rgba(245,158,11,0.3)]"
-            >
-              Ir al Calendario
-            </Button>
-          </div>
-          
-          <div className="space-y-3">
-            {todayRoutines.map((routine, idx) => (
-              <div 
-                key={idx} 
-                className="bg-[#111827] p-4 rounded-xl border border-[#374151] hover:border-amber-500/50 transition-colors"
-              >
-                <h4 className="font-bold text-white text-lg mb-2">{routine.day.name}</h4>
-                <div className="flex gap-2 flex-wrap">
-                  {routine.day.blocks?.map((block, bIdx) => (
-                    <span 
-                      key={bIdx} 
-                      className="text-xs bg-[#374151] text-amber-500 px-3 py-1 rounded-full font-bold"
-                    >
-                      {block.name}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
-
-      {/* HISTORIAL RECIENTE */}
-      {recentLogs.length > 0 && (
-        <Card className="p-6">
-          <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-            <History size={20} className="text-[#74ACDF]" />
-            Historial Reciente
-          </h3>
-          <div className="space-y-3">
-            {recentLogs.map((log, idx) => (
-              <div 
-                key={idx} 
-                className="bg-[#111827] p-4 rounded-xl border border-[#374151] flex justify-between items-center"
-              >
-                <div>
-                  <p className="text-white font-bold">
-                    {new Date(log.date).toLocaleDateString('es-AR')}
-                  </p>
-                  <p className="text-sm text-gray-400 mt-1">
-                    {log.rpe && `RPE: ${log.rpe}/10`}
-                  </p>
-                </div>
-                <CheckCircle size={20} className="text-emerald-500" />
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
-
-      {/* MOTIVACIÓN */}
-      <Card className="p-6 bg-gradient-to-br from-amber-500/10 to-transparent border-amber-500/30">
-        <div className="flex items-start gap-4">
-          <Award size={32} className="text-amber-500 shrink-0" />
-          <div>
-            <h3 className="text-xl font-bold text-white mb-2">¡Seguí así!</h3>
-            <p className="text-gray-300 text-sm leading-relaxed">
-              La constancia es la clave del progreso. Cada entrenamiento te acerca más a tus objetivos.
-            </p>
+    <div className="min-h-[100dvh] bg-[#111827] flex items-center justify-center p-6 relative overflow-hidden">
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-amber-500/10 rounded-full blur-[120px] pointer-events-none"></div>
+      <Card className="max-w-md w-full p-10 flex flex-col gap-6 relative z-10 border-amber-500/20 shadow-2xl rounded-[3rem] bg-[#1f2937]/90 backdrop-blur-xl">
+        <div className="text-center flex flex-col items-center mb-4">
+          <h1 className="text-5xl font-black text-white italic tracking-tighter leading-none">CORONADOS</h1>
+          <div className="flex items-center justify-center gap-2 mt-2 w-full">
+            <div className="h-[2px] bg-amber-500 flex-1"></div>
+            <span className="text-amber-500 font-black tracking-[0.4em] text-[10px] uppercase">De Gloria</span>
+            <div className="h-[2px] bg-amber-500 flex-1"></div>
           </div>
         </div>
+        
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          {!isLogin && (
+            <input type="text" placeholder="NOMBRE COMPLETO" className="w-full bg-[#111827] border border-gray-700 rounded-2xl px-6 py-4 text-white font-bold focus:outline-none focus:border-amber-500" value={name} onChange={e => setName(e.target.value)} required />
+          )}
+          <input type="email" placeholder="CORREO ELECTRÓNICO" className="w-full bg-[#111827] border border-gray-700 rounded-2xl px-6 py-4 text-white font-bold focus:outline-none focus:border-amber-500" value={email} onChange={e => setEmail(e.target.value)} required />
+          <input type="password" placeholder="CONTRASEÑA" className="w-full bg-[#111827] border border-gray-700 rounded-2xl px-6 py-4 text-white font-bold focus:outline-none focus:border-amber-500" value={password} onChange={e => setPassword(e.target.value)} required />
+          
+          {error && <p className="text-red-400 text-xs font-bold text-center bg-red-500/10 p-3 rounded-xl border border-red-500/20">{error}</p>}
+          
+          <button type="submit" className="w-full py-4 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 text-gray-900 font-black uppercase tracking-widest mt-2 shadow-lg hover:scale-[1.02] active:scale-95 transition-all" disabled={loading}>
+            {loading ? 'PROCESANDO...' : (isLogin ? 'Iniciar Sesión' : 'Registrarme')}
+          </button>
+        </form>
+
+        <button onClick={() => { setIsLogin(!isLogin); setError(''); }} className="w-full mt-2 text-xs text-gray-500 hover:text-amber-500 transition-colors font-black uppercase tracking-widest">
+            {isLogin ? '¿No tenés cuenta? Registrate acá' : '¿Ya sos parte? Iniciá sesión'}
+        </button>
       </Card>
     </div>
   );
 }
 
-// ✅ CALENDARIO DEL ALUMNO
-function StudentCalendarView({ programs, currentUserId, currentUserData, exercises, workoutLogs }) {
-  const [activeSession, setActiveSession] = useState(null);
-  const [currentDate, setCurrentDate] = useState(new Date());
-
-  const viewDays = currentUserData.calendarViewDays || 7;
-  
-  const myPrograms = useMemo(
-    () => programs.filter(p => p.assignedTo === currentUserId && !p.isTemplate),
-    [programs, currentUserId]
-  );
-
-  const getDayData = useCallback((dateStr) => {
-    const routines = [];
-    myPrograms.forEach(prog => {
-      if (prog.assignedDates) {
-        Object.keys(prog.assignedDates).forEach(dayId => {
-          if (prog.assignedDates[dayId] === dateStr) {
-            const day = prog.days?.find(d => d.id === dayId);
-            if (day) routines.push({ program: prog, day });
-          }
-        });
-      }
-    });
-    const log = workoutLogs.find(l => l.studentId === currentUserId && l.date === dateStr);
-    return { routines, log };
-  }, [myPrograms, workoutLogs, currentUserId]);
-
-  const days = useMemo(() => {
-    const result = [];
-    const start = new Date(currentDate);
-    start.setDate(start.getDate() - Math.floor(viewDays / 2));
-    
-    for (let i = 0; i < viewDays; i++) {
-      const date = new Date(start);
-      date.setDate(date.getDate() + i);
-      const dateStr = date.toISOString().split('T')[0];
-      result.push({
-        date,
-        dateStr,
-        data: getDayData(dateStr)
-      });
-    }
-    return result;
-  }, [currentDate, viewDays, getDayData]);
-
-  const handleStartWorkout = (program, day, dateStr) => {
-    setActiveSession({ program, day, date: dateStr });
-  };
-
-  const handleFinishWorkout = () => {
-    setActiveSession(null);
-  };
-
-  const goToday = () => setCurrentDate(new Date());
-  const prevPeriod = () => {
-    const newDate = new Date(currentDate);
-    newDate.setDate(newDate.getDate() - viewDays);
-    setCurrentDate(newDate);
-  };
-  const nextPeriod = () => {
-    const newDate = new Date(currentDate);
-    newDate.setDate(newDate.getDate() + viewDays);
-    setCurrentDate(newDate);
-  };
-
-  if (activeSession) {
-    return (
-      <ActiveWorkoutSession
-        program={activeSession.program}
-        day={activeSession.day}
-        date={activeSession.date}
-        studentId={currentUserId}
-        exercises={exercises}
-        workoutLogs={workoutLogs}
-        onFinish={handleFinishWorkout}
-      />
-    );
-  }
-
-  const today = new Date().toISOString().split('T')[0];
-
+// --- VISTA DASHBOARD ADMIN ---
+function AdminDashboardView({ users, programs, onGoToLibrary }) {
+  const activeAssignments = programs.filter(p => !p.isTemplate && p.assignedTo);
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h2 className="text-3xl font-bold text-white">Mi Calendario</h2>
-          <p className="text-gray-400 mt-1">
-            Viendo {viewDays} días de entrenamiento
-          </p>
+    <div className="space-y-10 animate-in fade-in duration-500">
+      <header>
+          <h2 className="text-5xl font-black text-white italic uppercase tracking-tighter">Panel de Control</h2>
+          <p className="text-amber-500 font-bold mt-2 uppercase tracking-widest text-xs">Resumen Operativo</p>
+      </header>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className="bg-gradient-to-br from-[#1f2937] to-[#111827] p-8 rounded-[2.5rem] border border-gray-800 flex items-center gap-6 shadow-2xl">
+          <div className="p-5 rounded-2xl text-amber-500 bg-amber-500/10"><Users size={36} /></div>
+          <div><p className="text-gray-500 text-xs uppercase font-black tracking-widest">Alumnos Activos</p><p className="text-4xl font-black text-white mt-1">{users.filter(u=>u.role==='alumno').length}</p></div>
         </div>
-        <div className="flex items-center gap-2">
-          <button 
-            onClick={prevPeriod} 
-            className="p-2 bg-[#1f2937] text-amber-500 rounded-xl hover:bg-[#374151] border border-[#374151]"
-          >
-            <ChevronLeft size={20}/>
-          </button>
-          <button 
-            onClick={goToday} 
-            className="px-4 py-2 bg-[#1f2937] text-white font-bold rounded-xl hover:bg-[#374151] border border-[#374151] text-sm"
-          >
-            Hoy
-          </button>
-          <button 
-            onClick={nextPeriod} 
-            className="p-2 bg-[#1f2937] text-amber-500 rounded-xl hover:bg-[#374151] border border-[#374151]"
-          >
-            <ChevronRight size={20}/>
-          </button>
+        <div className="bg-gradient-to-br from-[#1f2937] to-[#111827] p-8 rounded-[2.5rem] border border-gray-800 flex items-center gap-6 shadow-2xl">
+          <div className="p-5 rounded-2xl text-blue-500 bg-blue-500/10"><CalendarDays size={36} /></div>
+          <div><p className="text-gray-500 text-xs uppercase font-black tracking-widest">Rutinas Asignadas</p><p className="text-4xl font-black text-white mt-1">{activeAssignments.length}</p></div>
         </div>
       </div>
+      
+      <div className="bg-gradient-to-r from-amber-500 to-orange-600 p-10 rounded-[3rem] shadow-2xl cursor-pointer hover:scale-[1.01] transition-all relative overflow-hidden group" onClick={onGoToLibrary}>
+        <div className="relative z-10 flex items-center justify-between mb-4">
+          <div className="flex items-center gap-4"><div className="bg-gray-900 p-4 rounded-2xl text-amber-500"><Library size={32}/></div> <h3 className="text-3xl font-black text-gray-900 uppercase italic">Librería Integrada</h3></div>
+          <ArrowUpRight className="text-gray-900" size={32} />
+        </div>
+        <p className="text-gray-900/80 font-bold relative z-10 text-lg">Gestioná tus plantillas, programas completos y workouts de días sueltos acá.</p>
+      </div>
+    </div>
+  );
+}
 
-      <div className="grid grid-cols-1 gap-4">
-        {days.map((dayInfo, idx) => {
-          const isToday = dayInfo.dateStr === today;
-          const hasLog = !!dayInfo.data.log;
-          const hasRoutine = dayInfo.data.routines.length > 0;
-
-          return (
-            <Card 
-              key={idx} 
-              className={`p-5 ${isToday ? 'border-2 border-amber-500 shadow-[0_0_20px_rgba(245,158,11,0.2)]' : ''}`}
-            >
-              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
-                <div>
-                  <div className="flex items-center gap-3">
-                    <h3 className={`text-xl font-bold ${isToday ? 'text-amber-500' : 'text-white'}`}>
-                      {dayInfo.date.toLocaleDateString('es-AR', { 
-                        weekday: 'long', 
-                        day: 'numeric', 
-                        month: 'long' 
-                      })}
-                    </h3>
-                    {isToday && (
-                      <span className="bg-amber-500 text-gray-900 text-xs font-black px-2 py-1 rounded-full uppercase tracking-widest">
-                        HOY
-                      </span>
-                    )}
-                  </div>
-                  {hasLog && (
-                    <p className="text-emerald-500 text-sm mt-1 flex items-center gap-1 font-bold">
-                      <CheckCircle size={14} /> Entrenamiento completado
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {!hasRoutine && !hasLog && (
-                <div className="text-center py-8 text-gray-500">
-                  <CalendarDays size={32} className="mx-auto mb-2 opacity-30" />
-                  <p className="text-sm">Día de descanso</p>
-                </div>
-              )}
-
-              {hasRoutine && (
-                <div className="space-y-3">
-                  {dayInfo.data.routines.map((routine, rIdx) => (
-                    <div 
-                      key={rIdx} 
-                      className="bg-[#111827] p-4 rounded-xl border border-[#374151]"
-                    >
-                      <div className="flex justify-between items-start mb-3">
-                        <div>
-                          <h4 className="font-bold text-white text-lg">
-                            {routine.day.name}
-                          </h4>
-                          <p className="text-sm text-gray-400 mt-1">
-                            {routine.program.name}
-                          </p>
-                        </div>
-                        {!hasLog && (
-                          <Button
-                            onClick={() => handleStartWorkout(routine.program, routine.day, dayInfo.dateStr)}
-                            variant="primary"
-                            className="shadow-[0_0_15px_rgba(245,158,11,0.2)]"
-                          >
-                            <Play size={16} /> Iniciar
-                          </Button>
-                        )}
-                      </div>
-
-                      <div className="space-y-2">
-                        {routine.day.blocks?.map((block, bIdx) => (
-                          <div key={bIdx} className="bg-[#1f2937] p-3 rounded-lg">
-                            <p className="text-xs font-bold text-[#74ACDF] mb-2 uppercase tracking-wider">
-                              {block.name}
-                            </p>
-                            <div className="space-y-1">
-                              {block.exercises?.map((ex, eIdx) => (
-                                <p key={eIdx} className="text-sm text-gray-300">
-                                  • {ex.name} - {ex.sets}x{ex.reps}
-                                  {ex.kg && ` @ ${ex.kg}kg`}
-                                </p>
-                              ))}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-
-                      {hasLog && dayInfo.data.log && (
-                        <div className="mt-4 pt-4 border-t border-[#374151]">
-                          <div className="bg-emerald-500/10 border border-emerald-500/30 p-3 rounded-lg">
-                            <p className="text-emerald-500 font-bold text-sm mb-2 flex items-center gap-2">
-                              <CheckCircle size={16} /> Completado
-                            </p>
-                            {dayInfo.data.log.rpe && (
-                              <p className="text-white text-sm">
-                                RPE: <span className="font-bold">{dayInfo.data.log.rpe}/10</span>
-                              </p>
-                            )}
-                            {dayInfo.data.log.comments && (
-                              <p className="text-gray-300 text-sm mt-2 italic">
-                                "{dayInfo.data.log.comments}"
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      )}
+// --- VISTA DASHBOARD ALUMNO ---
+function StudentHomeView({ currentUserData, programs, onGoToCalendar, startSession }) {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const myP = programs.filter(p => p.assignedTo === currentUserData.id);
+    let tR = null;
+    myP.forEach(p => { for(let k in p.assignedDates) if(p.assignedDates[k] === todayStr) tR = {program: p, day: p.days.find(d=>d.id===k)}; });
+    
+    return (
+        <div className="space-y-12 animate-in fade-in duration-500">
+            <header>
+                <h2 className="text-5xl font-black text-white italic tracking-tighter uppercase">Hola, {currentUserData.name.split(' ')[0]}</h2>
+                <p className="text-amber-500 font-bold mt-2 opacity-80">El éxito es la suma de pequeños esfuerzos diarios.</p>
+            </header>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div className="bg-gradient-to-br from-amber-500 to-orange-600 p-10 rounded-[3rem] shadow-2xl relative overflow-hidden group min-h-[300px] flex flex-col justify-between">
+                    <div className="relative z-10">
+                        <h3 className="text-3xl font-black text-gray-900 uppercase italic leading-none">Tu Plan<br/>de Hoy</h3>
+                        <p className="mt-4 font-bold text-gray-900/80 text-lg">{tR ? tR.day.name : "Descanso o sin rutina asignada."}</p>
                     </div>
-                  ))}
+                    {tR && <button onClick={()=>startSession(tR)} className="relative z-10 w-fit bg-gray-900 text-amber-500 px-10 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl active:scale-95 transition-all mt-8">Empezar a entrenar</button>}
                 </div>
-              )}
-            </Card>
+                <div className="grid grid-cols-2 gap-6">
+                    {[{i:Calendar, t:'Calendario', c:'blue', action: onGoToCalendar},{i:Award, t:'Récords', c:'emerald'},{i:Activity, t:'Métricas', c:'purple'},{i:Heart, t:'Salud', c:'red'}].map(x => (
+                        <div key={x.t} onClick={x.action} className="bg-[#1f2937] border border-gray-800 p-8 rounded-[2.5rem] flex flex-col items-center justify-center text-center group cursor-pointer hover:border-amber-500/50 transition-all shadow-lg">
+                            <div className={`w-16 h-16 rounded-2xl bg-${x.c}-500/10 text-${x.c}-500 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}><x.i size={32}/></div>
+                            <p className="text-white font-black text-[10px] uppercase tracking-widest">{x.t}</p>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// --- VISTA CALENDARIO ALUMNO ---
+function StudentCalendarView({ programs, currentUserId, workoutLogs, startSession }) {
+    const [currentDate, setCurrentDate] = useState(new Date());
+    
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const firstDayOfMonth = new Date(year, month, 1).getDay();
+    const startDay = firstDayOfMonth === 0 ? 6 : firstDayOfMonth - 1; 
+
+    const myPrograms = programs.filter(p => p.assignedTo === currentUserId && !p.isTemplate);
+
+    const getDayData = (dateStr) => {
+        let routines = [];
+        myPrograms.forEach(prog => {
+            if (prog.assignedDates) {
+                Object.keys(prog.assignedDates).forEach(dayId => {
+                    if (prog.assignedDates[dayId] === dateStr) routines.push({ program: prog, day: prog.days.find(d => d.id === dayId) });
+                });
+            }
+        });
+        const log = workoutLogs.find(l => l.studentId === currentUserId && l.date === dateStr);
+        return { routines, log };
+    };
+
+    const gridCells = [];
+    for (let i = 0; i < startDay; i++) gridCells.push(null);
+    for (let i = 1; i <= daysInMonth; i++) {
+        const dStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+        gridCells.push({ dayNum: i, dateStr: dStr, data: getDayData(dStr) });
+    }
+
+    return (
+        <div className="space-y-8 animate-in fade-in">
+            <div className="flex justify-between items-center bg-[#1f2937] p-8 rounded-[2.5rem] border border-gray-800 shadow-xl">
+                <h3 className="text-3xl font-black text-white uppercase italic">{currentDate.toLocaleString('es-AR', {month:'long', year:'numeric'})}</h3>
+                <div className="flex gap-2">
+                    <button onClick={()=>setCurrentDate(new Date(year, month - 1, 1))} className="p-3 bg-gray-800 rounded-xl text-white hover:bg-amber-500 hover:text-gray-900 transition-colors"><ChevronLeft size={24}/></button>
+                    <button onClick={()=>setCurrentDate(new Date(year, month + 1, 1))} className="p-3 bg-gray-800 rounded-xl text-white hover:bg-amber-500 hover:text-gray-900 transition-colors"><ChevronRight size={24}/></button>
+                </div>
+            </div>
+
+            <div className="bg-[#1f2937] border border-gray-800 p-8 rounded-[2.5rem] shadow-2xl">
+                <div className="grid grid-cols-7 gap-4 mb-4">
+                    {['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'].map(d=><div key={d} className="text-center text-gray-500 text-xs font-black uppercase">{d}</div>)}
+                </div>
+                <div className="grid grid-cols-7 gap-4">
+                    {gridCells.map((cell, idx) => {
+                        if (!cell) return <div key={idx} className="aspect-square rounded-2xl bg-[#111827]/30 border border-gray-800/50"></div>;
+                        
+                        const isToday = cell.dateStr === new Date().toISOString().split('T')[0];
+                        const hasLog = !!cell.data.log;
+                        const hasRoutine = cell.data.routines.length > 0;
+
+                        return (
+                            <div key={cell.dateStr} className={`aspect-square rounded-2xl p-2 flex flex-col items-center justify-center relative border-2 transition-all ${isToday ? 'bg-amber-500/10 border-amber-500/50' : 'bg-[#111827] border-gray-800'}`}>
+                                <span className={`font-black text-lg ${isToday ? 'text-amber-500' : 'text-gray-400'}`}>{cell.dayNum}</span>
+                                {hasLog && <div className="absolute bottom-2 w-2 h-2 bg-emerald-500 rounded-full shadow-[0_0_8px_#10b981]"></div>}
+                                {hasRoutine && !hasLog && <div className="absolute bottom-2 w-2 h-2 bg-amber-500 rounded-full shadow-[0_0_8px_#f59e0b]"></div>}
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+            
+            <div className="space-y-4">
+                <h4 className="text-xl font-black text-white uppercase italic tracking-widest pl-2">Entrenamientos Pendientes</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {gridCells.filter(c => c && c.data.routines.length > 0 && !c.data.log).map(cell => (
+                        cell.data.routines.map((r, i) => (
+                            <div key={`${cell.dateStr}-${i}`} className="bg-[#1f2937] p-6 rounded-2xl border border-gray-800 flex justify-between items-center shadow-lg border-l-4 border-l-amber-500">
+                                <div>
+                                    <p className="text-white font-black text-lg">{r.day.name}</p>
+                                    <p className="text-amber-500 text-xs font-bold uppercase tracking-widest mt-1">Fecha: {cell.dateStr}</p>
+                                </div>
+                                <button onClick={() => startSession(r)} className="p-3 bg-amber-500 text-gray-900 rounded-xl font-black uppercase text-xs">Empezar</button>
+                            </div>
+                        ))
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// --- SESIÓN ACTIVA ALUMNO (ENTRENAMIENTO EN VIVO) ---
+function ActiveWorkoutSession({ session, exercisesList, db, appId, userId, onClose }) {
+    const [completedSets, setCompletedSets] = useState({});
+    const [rpe, setRpe] = useState(5);
+    const [comments, setComments] = useState('');
+    const [saving, setSaving] = useState(false);
+    const [videoUrl, setVideoUrl] = useState(null);
+
+    const toggleSet = (exId, sIdx, kg, reps) => {
+        const key = `${exId}-${sIdx}`;
+        setCompletedSets(prev => ({...prev, [key]: prev[key] ? null : { done: true, kg, reps }}));
+    };
+
+    const finish = async () => {
+        setSaving(true);
+        try {
+            const exLogs = {};
+            Object.keys(completedSets).forEach(key => {
+                if(!completedSets[key]) return;
+                const [exId, sIdx] = key.split('-');
+                if(!exLogs[exId]) exLogs[exId] = [];
+                exLogs[exId][sIdx] = completedSets[key];
+            });
+            
+            await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'workout_logs'), {
+                studentId: userId,
+                programId: session.program.id,
+                dayId: session.day.id,
+                date: new Date().toISOString().split('T')[0],
+                rpe, comments,
+                exercises: exLogs,
+                completedAt: new Date().toISOString()
+            });
+            onClose();
+        } catch(e) {
+            console.error(e);
+            alert("Error al guardar sesión: " + e.message);
+            setSaving(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-[#111827] z-[200] overflow-y-auto flex flex-col">
+            <header className="p-6 border-b border-white/5 flex justify-between items-center sticky top-0 bg-[#111827]/90 backdrop-blur z-20 shadow-xl">
+                <div>
+                    <p className="text-amber-500 text-[10px] font-black uppercase tracking-widest animate-pulse flex items-center gap-2"><div className="w-2 h-2 bg-amber-500 rounded-full"></div> En Progreso</p>
+                    <h2 className="text-3xl font-black text-white uppercase italic tracking-tighter leading-none mt-1">{session.day.name}</h2>
+                </div>
+                <button onClick={onClose} className="bg-red-500/10 text-red-500 px-4 py-2 rounded-xl font-bold text-xs uppercase hover:bg-red-500/20 transition-colors">Cancelar</button>
+            </header>
+
+            <div className="flex-1 p-4 md:p-8 space-y-8 max-w-3xl mx-auto w-full pb-32">
+                {session.day.blocks.map((block, bIdx) => (
+                    <div key={bIdx} className="space-y-4">
+                        <h3 className="text-amber-500 font-black uppercase tracking-widest text-sm border-l-4 border-amber-500 pl-3 bg-amber-500/5 py-2">{block.name}</h3>
+                        {block.exercises.map((ex, eIdx) => {
+                            const fullEx = exercisesList.find(e => e.id === ex.exerciseId);
+                            return (
+                                <div key={eIdx} className="bg-[#1f2937] p-6 rounded-3xl border border-gray-800 space-y-6 shadow-xl">
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <h4 className="text-2xl font-black text-white leading-tight flex items-center gap-3">
+                                                {ex.name}
+                                                {fullEx?.videoUrl && <button onClick={() => setVideoUrl(fullEx.videoUrl)} className="text-red-500 bg-red-500/10 p-2 rounded-lg hover:bg-red-500/20 transition-colors"><Youtube size={20}/></button>}
+                                            </h4>
+                                            <div className="flex gap-3 mt-3">
+                                                <span className="text-xs bg-gray-800 text-gray-300 px-3 py-1.5 rounded-lg font-mono border border-gray-700">{ex.sets} SERIES</span>
+                                                <span className="text-xs bg-gray-800 text-gray-300 px-3 py-1.5 rounded-lg font-mono border border-gray-700">{ex.reps} REPS</span>
+                                                {ex.kg && <span className="text-xs bg-amber-500/10 text-amber-500 px-3 py-1.5 rounded-lg font-black border border-amber-500/20">{ex.kg} KG</span>}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 border-t border-gray-800 pt-6">
+                                        {Array.from({ length: parseInt(ex.sets) || 0 }).map((_, sIdx) => {
+                                            const isDone = !!completedSets[`${ex.exerciseId}-${sIdx}`];
+                                            return (
+                                                <button key={sIdx} onClick={() => toggleSet(ex.exerciseId, sIdx, ex.kg, ex.reps)} className={`p-4 rounded-2xl font-black text-xl border-2 transition-all flex flex-col items-center justify-center gap-1 ${isDone ? 'bg-emerald-500 border-emerald-400 text-gray-900 shadow-[0_0_20px_rgba(16,185,129,0.4)] scale-105' : 'bg-[#111827] border-gray-700 text-gray-500 hover:border-amber-500/50'}`}>
+                                                    <span>{sIdx + 1}</span>
+                                                    <CheckCircle size={18} className={isDone ? 'opacity-100' : 'opacity-20'} />
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                ))}
+
+                <div className="bg-gradient-to-br from-[#1f2937] to-[#111827] p-8 rounded-[3rem] border border-gray-800 shadow-2xl space-y-8">
+                    <h3 className="text-2xl font-black text-white uppercase italic border-b border-gray-800 pb-4">Feedback de la Sesión</h3>
+                    <div>
+                        <label className="flex justify-between text-sm font-black text-gray-400 uppercase tracking-widest mb-4"><span>Esfuerzo (RPE)</span><span className={`px-3 py-1 rounded-lg ${rpe > 7 ? 'bg-red-500/10 text-red-500' : 'bg-amber-500/10 text-amber-500'}`}>{rpe} / 10</span></label>
+                        <input type="range" min="1" max="10" value={rpe} onChange={e => setRpe(e.target.value)} className="w-full accent-amber-500 h-3 bg-gray-800 rounded-lg appearance-none cursor-pointer" />
+                    </div>
+                    <textarea placeholder="¿Algún récord personal? ¿Molestias? Dejale un comentario a Nico..." className="w-full bg-[#111827] border border-gray-700 rounded-2xl px-6 py-5 text-white text-sm font-medium focus:border-amber-500 transition-colors shadow-inner" value={comments} onChange={e => setComments(e.target.value)} rows="3"></textarea>
+                </div>
+            </div>
+
+            <div className="fixed bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-[#111827] via-[#111827] to-transparent z-20">
+                <button onClick={finish} disabled={saving} className="w-full max-w-3xl mx-auto py-5 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 text-gray-900 font-black text-lg uppercase tracking-[0.2em] shadow-[0_10px_40px_rgba(245,158,11,0.4)] block hover:scale-[1.02] transition-transform">
+                    {saving ? 'GUARDANDO DATOS...' : 'FINALIZAR ENTRENAMIENTO'}
+                </button>
+            </div>
+
+            <Modal isOpen={!!videoUrl} onClose={() => setVideoUrl(null)} title="Técnica del Ejercicio">
+                <div className="aspect-video w-full bg-black rounded-xl overflow-hidden border border-gray-800 shadow-2xl">
+                    <iframe width="100%" height="100%" src={getYoutubeEmbedUrl(videoUrl)} frameBorder="0" allowFullScreen></iframe>
+                </div>
+            </Modal>
+        </div>
+    );
+}
+
+// --- VISTA LIBRERÍA ---
+function LibraryView({ exercises, programs, db, appId, onGoToMacroBuilder, onGoToMicroBuilder }) {
+  const [activeSection, setActiveSection] = useState(null);
+
+  const libraryItems = [
+    { id: 'actividad', icon: Dumbbell, title: 'Actividad Física', desc: 'Base de datos de ejercicios' },
+    { id: 'programas', icon: CalendarDays, title: 'Macrociclos', desc: 'Programas de varias semanas' },
+    { id: 'workouts', icon: ListPlus, title: 'Workouts', desc: 'Rutinas de 1 día' }
+  ];
+
+  if (activeSection === 'actividad') return <ExercisesManager exercises={exercises} db={db} appId={appId} onBack={() => setActiveSection(null)} />;
+  if (activeSection === 'programas') return <TemplatesManager programs={programs} db={db} appId={appId} type="program" onBack={() => setActiveSection(null)} onGoToBuilder={onGoToMacroBuilder} />;
+  if (activeSection === 'workouts') return <TemplatesManager programs={programs} db={db} appId={appId} type="workout" onBack={() => setActiveSection(null)} onGoToBuilder={onGoToMicroBuilder} />;
+
+  return (
+    <div className="space-y-8 animate-in fade-in duration-500">
+      <header>
+          <h2 className="text-5xl font-black text-white italic tracking-tighter uppercase">Librería Pro</h2>
+          <p className="text-gray-400 mt-2 font-bold uppercase tracking-widest text-xs">El cerebro de Coronados de Gloria</p>
+      </header>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {libraryItems.map((item) => {
+          const IconCmp = item.icon;
+          return (
+            <div key={item.id} onClick={() => setActiveSection(item.id)} className="bg-[#1f2937] border border-gray-800 rounded-[2.5rem] p-8 cursor-pointer hover:border-amber-500/50 transition-all shadow-xl group">
+              <div className="w-16 h-16 bg-[#111827] rounded-2xl text-amber-500 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform shadow-inner"><IconCmp size={32} /></div>
+              <h4 className="text-2xl font-black text-white mb-2 uppercase italic">{item.title}</h4>
+              <p className="text-sm text-gray-500 font-medium">{item.desc}</p>
+            </div>
           );
         })}
       </div>
@@ -1355,68 +783,846 @@ function StudentCalendarView({ programs, currentUserId, currentUserData, exercis
   );
 }
 
-// ===== RESTO DE COMPONENTES (CONTINUACIÓN) =====
+function ExercisesManager({ exercises, db, appId, onBack }) {
+  const [editingExercise, setEditingExercise] = useState(null); 
+  const [searchTerm, setSearchTerm] = useState('');
+  
+  const handleDeleteExercise = async (id) => {
+    if(window.confirm('¿Seguro que querés eliminar este ejercicio?')) {
+      try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'exercises', id)); } catch(err) { console.error(err); }
+    }
+  };
 
-// Los componentes restantes (AdminDashboardView, LibraryView, etc.) permanecen igual que en tu código original
-// pero con las correcciones aplicadas (exercisesList → exercises, etc.)
-
-// Por brevedad, incluyo solo los que tienen cambios críticos:
-
-function AdminDashboardView({ users, programs, onGoToLibrary }) {
-  const activeAssignments = useMemo(
-    () => programs.filter(p => !p.isTemplate && p.assignedTo),
-    [programs]
-  );
+  const filteredExercises = exercises.filter(ex => ex.name.toLowerCase().includes(searchTerm.toLowerCase()));
 
   return (
-    <div className="space-y-6">
-      <header className="mb-8">
-        <h2 className="text-3xl font-bold text-white">Resumen Operativo</h2>
-      </header>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-        <Card className="p-6 flex items-center gap-4 border-l-4 border-l-amber-500">
-          <div className="p-4 rounded-xl text-amber-500 bg-amber-500/10">
-            <Users size={24} />
-          </div>
+    <div className="space-y-8 animate-in slide-in-from-right-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-[#1f2937] p-6 rounded-3xl border border-gray-800 shadow-xl">
+        <div className="flex items-center gap-6">
+          <button onClick={onBack} className="p-3 bg-gray-800 text-amber-500 rounded-xl hover:bg-amber-500 hover:text-gray-900 transition-colors"><ChevronLeft size={24}/></button>
           <div>
-            <p className="text-gray-400 text-sm font-medium">Alumnos Activos</p>
-            <p className="text-3xl font-bold text-white mt-1">
-              {users.filter(u => u.role === 'alumno').length}
-            </p>
+              <h2 className="text-3xl font-black text-white uppercase italic leading-none">Ejercicios</h2>
+              <p className="text-amber-500 text-[10px] font-black uppercase tracking-widest mt-2">{exercises.length} Disponibles</p>
           </div>
-        </Card>
-        
-        <Card className="p-6 flex items-center gap-4 border-l-4 border-l-[#74ACDF]">
-          <div className="p-4 rounded-xl text-[#74ACDF] bg-[#74ACDF]/10">
-            <CalendarDays size={24} />
-          </div>
-          <div>
-            <p className="text-gray-400 text-sm font-medium">Rutinas Asignadas</p>
-            <p className="text-3xl font-bold text-white mt-1">
-              {activeAssignments.length}
-            </p>
-          </div>
-        </Card>
-      </div>
-      
-      <div 
-        className="bg-[#1f2937] p-6 rounded-2xl border border-amber-500/30 cursor-pointer hover:border-amber-500 transition-colors" 
-        onClick={onGoToLibrary}
-      >
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-3">
-            <Library className="text-amber-500" size={24}/> 
-            <h3 className="text-xl font-bold text-white">Librería Integrada</h3>
-          </div>
-          <ArrowUpRight className="text-gray-400" size={20} />
         </div>
-        <p className="text-gray-400 text-sm mb-4">
-          Accedé acá para gestionar tus plantillas, programas completos y workouts de días sueltos.
-        </p>
+        <button onClick={() => setEditingExercise({})} className="bg-amber-500 text-gray-900 px-6 py-3 rounded-xl font-black uppercase text-xs tracking-widest shadow-lg flex gap-2 items-center"><Plus size={18}/> Crear Nuevo</button>
+      </div>
+
+      <div className="bg-[#111827] p-4 rounded-2xl border border-gray-800 flex items-center gap-4 shadow-inner">
+        <Search size={24} className="text-gray-500 ml-2" />
+        <input type="text" placeholder="Buscar ejercicio..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="bg-transparent border-none text-white font-bold focus:outline-none w-full text-lg" />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {filteredExercises.map(ex => (
+          <div key={ex.id} className="bg-[#1f2937] p-6 rounded-3xl border border-gray-800 flex justify-between items-center group hover:border-amber-500/30 transition-all shadow-lg">
+            <div>
+              <p className="font-black text-white text-xl uppercase italic tracking-tight">{ex.name}</p>
+              <div className="flex gap-2 mt-3">
+                <span className="text-[10px] bg-amber-500/10 text-amber-500 px-3 py-1 rounded-lg uppercase tracking-widest font-black">{ex.primaryMuscle || 'General'}</span>
+                {ex.videoUrl && <span className="text-[10px] bg-red-500/10 text-red-500 px-3 py-1 rounded-lg uppercase tracking-widest font-black flex gap-1 items-center"><Youtube size={12}/> Video</span>}
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => setEditingExercise(ex)} className="p-3 bg-gray-800 text-gray-400 hover:text-amber-500 rounded-xl transition-colors"><Edit size={20}/></button>
+              <button onClick={() => handleDeleteExercise(ex.id)} className="p-3 bg-gray-800 text-gray-400 hover:text-red-500 rounded-xl transition-colors"><Trash2 size={20}/></button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {editingExercise !== null && <ExerciseModal initialData={editingExercise} db={db} appId={appId} onClose={() => setEditingExercise(null)} />}
+    </div>
+  );
+}
+
+function ExerciseModal({ initialData, db, appId, onClose }) {
+  const [name, setName] = useState(initialData?.name || '');
+  const [videoUrl, setVideoUrl] = useState(initialData?.videoUrl || '');
+  const [primaryMuscle, setPrimaryMuscle] = useState(initialData?.primaryMuscle || '');
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSave = async () => {
+    if (!name.trim()) return;
+    setIsSaving(true);
+    const dataObj = { name: name.trim(), videoUrl, primaryMuscle, updatedAt: new Date().toISOString() };
+    try {
+      if (initialData.id) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'exercises', initialData.id), dataObj, { merge: true });
+      else await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'exercises'), { ...dataObj, createdAt: new Date().toISOString() });
+      onClose();
+    } catch(err) { console.error(err); }
+    setIsSaving(false);
+  };
+
+  return (
+      <Modal isOpen={true} onClose={onClose} title={initialData.id ? "Editar Ejercicio" : "Nuevo Ejercicio"}>
+          <div className="space-y-6">
+              <input type="text" placeholder="NOMBRE DEL EJERCICIO (Ej: Peso Muerto)" value={name} onChange={e=>setName(e.target.value)} className="w-full bg-[#111827] border border-gray-700 rounded-2xl px-6 py-4 text-white font-black uppercase text-lg" />
+              <input type="text" placeholder="MÚSCULO PRINCIPAL (Ej: Piernas)" value={primaryMuscle} onChange={e=>setPrimaryMuscle(e.target.value)} className="w-full bg-[#111827] border border-gray-700 rounded-2xl px-6 py-4 text-white font-bold" />
+              <input type="text" placeholder="LINK DE YOUTUBE (Opcional)" value={videoUrl} onChange={e=>setVideoUrl(e.target.value)} className="w-full bg-[#111827] border border-gray-700 rounded-2xl px-6 py-4 text-white font-bold" />
+              <button onClick={handleSave} disabled={!name || isSaving} className="w-full py-5 bg-gradient-to-r from-amber-500 to-orange-500 text-gray-900 rounded-2xl font-black uppercase tracking-widest text-sm shadow-xl">{isSaving ? 'GUARDANDO...' : 'GUARDAR'}</button>
+          </div>
+      </Modal>
+  );
+}
+
+function TemplatesManager({ programs, db, appId, type, onBack, onGoToBuilder }) {
+  const libraryPrograms = programs.filter(p => p.isTemplate && (p.programType === type || (!p.programType && type === 'program')));
+  const handleDeleteTemplate = async (id) => {
+    if(window.confirm('¿Seguro que querés eliminar esta plantilla?')) {
+      try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'programs', id)); } catch(err) { console.error(err); }
+    }
+  };
+
+  return (
+    <div className="space-y-8 animate-in slide-in-from-right-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-[#1f2937] p-6 rounded-3xl border border-gray-800 shadow-xl">
+        <div className="flex items-center gap-6">
+          <button onClick={onBack} className="p-3 bg-gray-800 text-amber-500 rounded-xl hover:bg-amber-500 hover:text-gray-900 transition-colors"><ChevronLeft size={24}/></button>
+          <div>
+            <h2 className="text-3xl font-black text-white uppercase italic leading-none">{type === 'program' ? 'Macrociclos' : 'Workouts Sueltos'}</h2>
+            <p className="text-gray-400 text-xs font-bold mt-2">{type === 'program' ? 'Plantillas de varias semanas' : 'Rutinas de 1 día'}</p>
+          </div>
+        </div>
+        <button onClick={() => onGoToBuilder(null)} className="bg-amber-500 text-gray-900 px-6 py-3 rounded-xl font-black uppercase text-xs tracking-widest shadow-lg flex gap-2 items-center"><Plus size={18}/> Crear Plantilla</button>
+      </div>
+
+      <div className="grid grid-cols-1 gap-6">
+          {libraryPrograms.length === 0 ? (
+              <div className="bg-[#1f2937] border-2 border-dashed border-gray-800 rounded-3xl p-16 text-center">
+                  <BookOpen size={64} className="mx-auto text-gray-700 mb-4" />
+                  <p className="text-gray-500 font-black uppercase tracking-widest">No hay plantillas guardadas</p>
+              </div>
+          ) : (
+              libraryPrograms.map(prog => (
+                  <div key={prog.id} className="bg-[#1f2937] p-6 md:p-8 rounded-3xl border border-gray-800 flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-xl border-l-4 border-l-amber-500 group">
+                      <div>
+                          <h4 className="font-black text-white text-2xl uppercase italic tracking-tight">{prog.name}</h4>
+                          <p className="text-sm text-gray-400 mt-2 font-medium">{prog.description || 'Sin descripción'}</p>
+                          <div className="flex gap-3 mt-4">
+                              {type === 'program' && <span className="text-[10px] bg-[#111827] text-gray-300 px-3 py-1.5 rounded-lg border border-gray-700 font-black uppercase">{prog.weeks || 1} Semanas</span>}
+                              <span className="text-[10px] bg-amber-500/10 text-amber-500 px-3 py-1.5 rounded-lg border border-amber-500/20 font-black uppercase">{prog.days?.length || 0} Sesiones</span>
+                          </div>
+                      </div>
+                      <div className="flex gap-3">
+                          <button onClick={() => onGoToBuilder(prog)} className="px-6 py-3 bg-gray-800 text-amber-500 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-amber-500 hover:text-gray-900 transition-colors">Editar</button>
+                          <button onClick={() => handleDeleteTemplate(prog.id)} className="p-3 bg-gray-800 text-gray-500 hover:text-red-500 rounded-xl transition-colors"><Trash2 size={20}/></button>
+                      </div>
+                  </div>
+              ))
+          )}
       </div>
     </div>
   );
 }
 
-// ===== CONTINUARÉ CON EL RESTO EN LA SIGUIENTE PARTE =====
+// --- CONSTRUCTORES ---
+function ProgramMacroBuilder({ initialProgram, onOpenDayBuilder, onSave, onCancel }) {
+  const [name, setName] = useState(initialProgram?.name || '');
+  const [description, setDescription] = useState(initialProgram?.description || '');
+  const [weeks, setWeeks] = useState(initialProgram?.weeks || 4);
+  const [days, setDays] = useState(initialProgram?.days || []); 
+
+  const handleSave = () => { 
+    if (!name || name.trim() === '') return;
+    onSave({ id: initialProgram?.id, ...initialProgram, name, description, programType: 'program', weeks, days, isTemplate: true }); 
+  };
+
+  const [draggedDayId, setDraggedDayId] = useState(null);
+  const [dragActionModal, setDragActionModal] = useState(null); 
+
+  const handleDragStart = (e, id) => { setDraggedDayId(id); e.dataTransfer.effectAllowed = 'copyMove'; };
+  const handleDragOver = (e) => { e.preventDefault(); };
+  const handleDrop = (e, targetId) => {
+    e.preventDefault();
+    if (draggedDayId && draggedDayId !== targetId) setDragActionModal({ sourceId: draggedDayId, targetId });
+    setDraggedDayId(null);
+  };
+
+  const confirmDragAction = (action) => {
+    const { sourceId, targetId } = dragActionModal;
+    const sourceDay = days.find(d => d.id === sourceId);
+    let newDays = deepCopy(days); 
+    if (action === 'move') newDays = newDays.filter(d => d.id !== sourceId);
+    newDays = newDays.filter(d => d.id !== targetId);
+    
+    const copiedDay = deepCopy(sourceDay);
+    copiedDay.id = targetId;
+    newDays.push(copiedDay);
+    setDays(newDays);
+    setDragActionModal(null);
+  };
+
+  const gridRows = [];
+  const dayLabels = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+
+  for (let w = 0; w < weeks; w++) {
+    const weekCells = [];
+    for (let d = 0; d < 7; d++) {
+      const relativeDayIndex = w * 7 + d;
+      const relativeDayId = relativeDayIndex.toString();
+      const existingDayData = days.find(day => day.id === relativeDayId);
+      
+      weekCells.push(
+        <div 
+          key={relativeDayId} 
+          onClick={() => onOpenDayBuilder({ id: initialProgram?.id, name, description, programType: 'program', weeks, days, isTemplate: true }, relativeDayId)}
+          onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, relativeDayId)}
+          className={`min-h-[100px] border-r border-b border-[#374151]/50 p-2 relative group cursor-pointer transition-colors ${existingDayData ? 'bg-amber-500/10 hover:bg-amber-500/20' : 'bg-[#111827]/30 hover:bg-[#374151]/30'}`}
+        >
+          <div className="text-[10px] text-gray-500 font-bold mb-1">Día {relativeDayIndex + 1}</div>
+          {existingDayData ? (
+            <div draggable onDragStart={(e) => { e.stopPropagation(); handleDragStart(e, relativeDayId); }} className="bg-[#1f2937] border border-amber-500/50 rounded p-2 shadow-sm cursor-grab active:cursor-grabbing hover:border-amber-500">
+              <p className="text-[11px] font-bold text-amber-500 truncate leading-tight">{existingDayData.name}</p>
+              <p className="text-[9px] text-gray-400 mt-1 flex justify-between items-center"><span>{existingDayData.blocks?.length || 0} Blq.</span><Move size={10}/></p>
+            </div>
+          ) : (
+            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><div className="bg-[#374151] p-1.5 rounded-full text-white"><Plus size={16}/></div></div>
+          )}
+        </div>
+      );
+    }
+    gridRows.push(
+      <div key={`w-${w}`} className="flex flex-col md:flex-row">
+        <div className="w-full md:w-16 bg-[#111827] flex items-center justify-center border-b md:border-b-0 border-r border-[#374151] py-2 md:py-0"><span className="text-xs font-black text-gray-400 -rotate-90 hidden md:block uppercase tracking-widest whitespace-nowrap">Semana {w+1}</span><span className="text-xs font-black text-gray-400 md:hidden uppercase tracking-widest">Semana {w+1}</span></div>
+        <div className="flex-1 grid grid-cols-7">{weekCells}</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6 max-w-5xl mx-auto pb-10">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-[#374151] pb-6 sticky top-0 bg-[#111827] z-20 pt-4">
+        <div><h2 className="text-3xl font-bold text-white">Constructor de Programa</h2><p className="text-sm text-amber-500 font-medium">Diseñá el macrociclo en vista calendario. <strong className="text-white">Podés arrastrar los días.</strong></p></div>
+        <div className="flex gap-3">
+          <Button variant="secondary" onClick={onCancel} className="py-3 px-6">Volver</Button>
+          <Button onClick={handleSave} disabled={!name || name.trim() === ''} className="shadow-[0_0_15px_rgba(245,158,11,0.3)] py-3"><Save size={18}/> Guardar Programa</Button>
+        </div>
+      </div>
+
+      <Card className="p-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="md:col-span-2"><Input label="Nombre del Programa" value={name} onChange={e=>setName(e.target.value)} placeholder="Ej: Fuerza Base Avanzado..." /></div>
+          <div><Select label="Duración (Semanas)" value={weeks} onChange={e=>setWeeks(parseInt(e.target.value))} options={[1,2,3,4,5,6,8,10,12].map(n=>({label: `${n} Semanas`, value: n}))} /></div>
+        </div>
+        <div className="mt-4"><Textarea label="Descripción general" value={description} onChange={e=>setDescription(e.target.value)} rows="2" /></div>
+      </Card>
+
+      <Card className="p-0 overflow-hidden border-[#374151]">
+        <div className="hidden md:flex ml-16 grid-cols-7 border-b border-[#374151] bg-[#111827]">
+          {dayLabels.map(l => <div key={l} className="flex-1 py-3 text-center text-xs font-bold text-gray-400 uppercase tracking-wider border-r border-[#374151] last:border-0">{l}</div>)}
+        </div>
+        <div className="flex flex-col">{gridRows}</div>
+      </Card>
+
+      {dragActionModal && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <Card className="w-full max-w-sm bg-[#1f2937] border-amber-500 shadow-2xl p-6 text-center">
+            <Copy size={48} className="mx-auto text-amber-500 mb-4" />
+            <h3 className="text-xl font-bold text-white mb-2">Has movido un día</h3>
+            <p className="text-gray-400 text-sm mb-6">¿Qué acción querés realizar con la rutina arrastrada?</p>
+            <div className="flex flex-col gap-3">
+              <Button variant="primary" onClick={() => confirmDragAction('copy')} className="py-3">Copiar Día (Dejar el original)</Button>
+              <Button variant="secondary" onClick={() => confirmDragAction('move')} className="py-3 border border-amber-500 text-amber-500">Mover Día (Borrar el original)</Button>
+              <Button variant="danger" onClick={() => setDragActionModal(null)} className="py-2 mt-2 border-0">Cancelar Acción</Button>
+            </div>
+          </Card>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DayMicroBuilder({ programData, relativeDayId, targetDate, exercises, workoutLogs, studentId, libraryPrograms, onSaveDay, onSaveToLibrary, onCancel }) {
+  const existingDayObj = programData?.days?.find(d => d.id === relativeDayId);
+  const existingDay = existingDayObj ? deepCopy(existingDayObj) : null;
+  const isNewDay = !existingDay;
+
+  const [dayName, setDayName] = useState(existingDay?.name || `Rutina Diaria`);
+  const [dayDesc, setDayDesc] = useState(existingDay?.description || '');
+  const [blocks, setBlocks] = useState(existingDay?.blocks || []);
+  const [historyModalExId, setHistoryModalExId] = useState(null);
+
+  const [saveAsNew, setSaveAsNew] = useState(false);
+  const [nameError, setNameError] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+
+  const addBlock = () => setBlocks([...blocks, { id: Date.now(), name: 'NUEVO BLOQUE', description: '', exercises: [] }]);
+  const removeBlock = (bIdx) => { const nb=[...blocks]; nb.splice(bIdx, 1); setBlocks(nb); };
+  
+  const updateBlock = (bIdx, field, val) => {
+    const nb = deepCopy(blocks);
+    nb[bIdx][field] = val;
+    setBlocks(nb);
+  };
+
+  const addExercise = (bIdx, exerciseId) => {
+    const exer = exercises.find(e => e.id === exerciseId);
+    if(!exer) return;
+    const nb = deepCopy(blocks);
+    nb[bIdx].exercises.push({ exerciseId: exer.id, name: exer.name, sets: '3', reps: '10', rest: '0s', kg: '', rpe: '' });
+    setBlocks(nb);
+  };
+  
+  const updateEx = (bIdx, eIdx, field, val) => { const nb = deepCopy(blocks); nb[bIdx].exercises[eIdx][field] = val; setBlocks(nb); };
+  const removeEx = (bIdx, eIdx) => { const nb = deepCopy(blocks); nb[bIdx].exercises.splice(eIdx, 1); setBlocks(nb); };
+
+  const handleSave = async () => {
+    if (!dayName.trim()) { setNameError("El nombre del día es obligatorio."); return; }
+    setNameError(''); setIsSaving(true);
+    
+    const isLibraryWorkout = programData?.programType === 'workout' && programData?.isTemplate;
+    const willSaveToLibrary = (!isLibraryWorkout && isNewDay) || saveAsNew;
+    const normalizedName = dayName.trim().toLowerCase();
+
+    if (willSaveToLibrary) {
+      const exists = libraryPrograms.some(p => p.programType === 'workout' && p.name.toLowerCase() === normalizedName);
+      if (exists) {
+        setNameError('Ya existe un Workout con este nombre en tu librería. Elegí otro nombre para no pisarlo.');
+        setIsSaving(false); return;
+      }
+    }
+
+    const updatedDay = { id: relativeDayId, name: dayName.trim(), description: dayDesc, blocks };
+
+    if (willSaveToLibrary) {
+      const workoutProg = { name: dayName.trim(), description: dayDesc, programType: 'workout', isTemplate: true, createdAt: new Date().toISOString(), weeks: 1, days: [{ ...updatedDay, id: '0' }] };
+      await onSaveToLibrary(workoutProg);
+    }
+
+    const newDays = deepCopy(programData?.days || []);
+    const idx = newDays.findIndex(d => d.id === relativeDayId);
+    if (idx >= 0) newDays[idx] = updatedDay; else newDays.push(updatedDay);
+    
+    await onSaveDay({ id: programData?.id, ...programData, days: newDays });
+    setIsSaving(false);
+  };
+
+  const handleClearDay = () => {
+    if(window.confirm('¿Eliminar toda la rutina de este día?')) {
+      const newDays = (programData?.days || []).filter(d => d.id !== relativeDayId);
+      onSaveDay({ id: programData?.id, ...programData, days: newDays });
+    }
+  };
+
+  return (
+    <div className="space-y-6 pb-10">
+      <div className="flex justify-between items-center border-b border-[#374151] pb-4 sticky top-0 bg-[#111827] z-20 pt-2">
+        <div>
+          <h3 className="text-2xl font-bold text-white">Diseñador de Rutina</h3>
+          <p className="text-sm text-amber-500 font-bold">{targetDate ? `Editando fecha: ${new Date(targetDate + 'T00:00:00').toLocaleDateString()}` : `Día Relativo ${parseInt(relativeDayId)+1} del Programa`}</p>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={onCancel} className="px-3 md:px-4"><ChevronLeft size={18}/><span className="hidden md:inline">Volver</span></Button>
+          <Button onClick={handleSave} disabled={isSaving} className="px-3 md:px-4"><Save size={18}/><span className="hidden md:inline">{isSaving ? 'Guardando...' : 'Guardar'}</span></Button>
+        </div>
+      </div>
+
+      <Card className="p-4 border-amber-500/30">
+        <input type="text" value={dayName} onChange={e=>{setDayName(e.target.value); setNameError('');}} className="w-full bg-transparent text-xl font-bold text-white focus:outline-none border-b border-[#374151] focus:border-amber-500 pb-2 mb-3" placeholder="Nombre (Ej: Tren Superior)" />
+        <input type="text" value={dayDesc} onChange={e=>setDayDesc(e.target.value)} className="w-full bg-transparent text-sm text-gray-400 focus:outline-none" placeholder="Instrucciones breves..." />
+        
+        {(!programData?.isTemplate || programData?.programType === 'program') && isNewDay ? (
+          <p className="text-xs text-amber-500 mt-3 flex items-center gap-1"><Info size={14}/> Este día se guardará automáticamente como un Workout nuevo en tu librería.</p>
+        ) : (!programData?.isTemplate || programData?.programType === 'program') && !isNewDay ? (
+          <div className="mt-4 p-3 bg-[#111827] border border-[#374151] rounded-xl flex flex-col gap-2">
+            <p className="text-xs text-gray-400 font-bold uppercase tracking-widest flex items-center gap-1"><Info size={12}/> Modificación Independiente</p>
+            <p className="text-xs text-gray-500 leading-snug mb-1">Si guardás ahora, los cambios <strong className="text-white">solo afectarán a este día específico</strong>. El programa original se mantendrá intacto.</p>
+            <label className="flex items-center gap-3 cursor-pointer hover:text-amber-500 transition-colors w-fit pt-2 border-t border-[#374151]/50">
+              <div className={`w-5 h-5 rounded flex items-center justify-center border ${saveAsNew ? 'bg-amber-500 border-amber-500' : 'bg-[#1f2937] border-gray-500'}`}>
+                {saveAsNew && <CheckSquare size={14} className="text-gray-900" />}
+              </div>
+              <input type="checkbox" className="hidden" checked={saveAsNew} onChange={(e) => setSaveAsNew(e.target.checked)} />
+              <span className="text-sm text-gray-300 font-medium">Además, guardar esta modificación como un nuevo Workout en mi librería.</span>
+            </label>
+          </div>
+        ) : null}
+        
+        {nameError && <p className="text-red-500 text-xs font-bold mt-2 bg-red-500/10 p-2 rounded-lg border border-red-500/30">{nameError}</p>}
+      </Card>
+
+      <div className="space-y-6">
+        {blocks.map((b, bIdx) => (
+          <div key={bIdx} className="bg-[#1f2937] rounded-2xl border border-[#374151] overflow-hidden shadow-lg">
+            <div className="bg-[#273243] p-3 border-b border-[#374151] flex items-start gap-3">
+              <div className="bg-[#334155] p-2 rounded-lg text-[#74ACDF] shrink-0"><ListPlus size={20}/></div>
+              <div className="flex-1">
+                <input type="text" value={b.name} onChange={e=>updateBlock(bIdx, 'name', e.target.value)} className="w-full bg-transparent text-sm font-black text-white focus:outline-none uppercase tracking-wide" placeholder="NOMBRE DEL BLOQUE" />
+                <input type="text" value={b.description} onChange={e=>updateBlock(bIdx, 'description', e.target.value)} className="w-full bg-transparent text-xs text-gray-400 focus:outline-none mt-1" placeholder="Descripción del bloque..." />
+              </div>
+              <button onClick={() => removeBlock(bIdx)} className="text-gray-500 hover:text-red-500 transition-colors p-1"><X size={16}/></button>
+            </div>
+
+            <div className="p-3 space-y-3">
+              {b.exercises.map((ex, eIdx) => (
+                <div key={eIdx} className="bg-[#111827] border border-[#374151] rounded-xl p-3 relative group">
+                  <div className="flex justify-between items-start mb-3">
+                    <h4 className="text-white font-bold">{ex.name}</h4>
+                    <button onClick={() => removeEx(bIdx, eIdx)} className="text-gray-500 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={16}/></button>
+                  </div>
+                  
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex items-center gap-1 bg-[#1f2937] px-2 py-1 rounded-lg border border-[#374151]"><RotateCw size={12} className="text-gray-400"/><input type="text" value={ex.sets} onChange={e=>updateEx(bIdx,eIdx,'sets',e.target.value)} className="w-6 bg-transparent text-white text-xs font-mono focus:outline-none text-center" placeholder="Ser" /></div>
+                    <div className="flex items-center gap-1 bg-[#1f2937] px-2 py-1 rounded-lg border border-[#374151]"><Target size={12} className="text-gray-400"/><input type="text" value={ex.reps} onChange={e=>updateEx(bIdx,eIdx,'reps',e.target.value)} className="w-10 bg-transparent text-white text-xs font-mono focus:outline-none text-center" placeholder="Reps" /></div>
+                    <div className="flex items-center gap-1 bg-[#1f2937] px-2 py-1 rounded-lg border border-[#374151]"><Timer size={12} className="text-gray-400"/><input type="text" value={ex.rest} onChange={e=>updateEx(bIdx,eIdx,'rest',e.target.value)} className="w-8 bg-transparent text-white text-xs font-mono focus:outline-none text-center" placeholder="0s" /></div>
+                    <div className="flex items-center gap-1 bg-[#1f2937] px-2 py-1 rounded-lg border border-[#374151]"><Weight size={12} className="text-gray-400"/><input type="text" value={ex.kg} onChange={e=>updateEx(bIdx,eIdx,'kg',e.target.value)} className="w-8 bg-transparent text-white text-xs font-mono focus:outline-none text-center" placeholder="Kg" /></div>
+                    <div className="flex items-center gap-1 bg-[#1f2937] px-2 py-1 rounded-lg border border-[#374151]"><Activity size={12} className="text-amber-500"/><input type="text" value={ex.rpe} onChange={e=>updateEx(bIdx,eIdx,'rpe',e.target.value)} className="w-6 bg-transparent text-white text-xs font-mono focus:outline-none text-center" placeholder="RPE" /></div>
+                  </div>
+
+                  <div className="mt-3 pt-2 border-t border-[#374151]/50">
+                    <button onClick={() => setHistoryModalExId(ex.exerciseId)} disabled={!studentId} className="text-xs font-bold text-[#74ACDF] hover:text-white flex items-center gap-1 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                      <History size={12}/> {studentId ? 'Ver histórico del alumno' : 'Solo disponible con alumno asignado'}
+                    </button>
+                  </div>
+                </div>
+              ))}
+              
+              <Select options={exercises.map(e=>({value:e.id, label:e.name}))} onChange={(e)=>{ if(e.target.value) addExercise(bIdx, e.target.value); e.target.value=''; }} className="w-full bg-[#1f2937] text-sm py-2" />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex flex-col md:flex-row gap-4 justify-between mt-8">
+        <div className="flex gap-2 flex-col md:flex-row w-full md:w-auto">
+          {existingDay && <Button variant="danger" onClick={handleClearDay}><Trash2 size={16}/> Limpiar este día</Button>}
+        </div>
+        <Button variant="darkAccent" onClick={addBlock} className="w-full md:w-auto border-dashed"><Plus size={18}/> Nuevo Bloque</Button>
+      </div>
+
+      {historyModalExId && <ExerciseHistoryModal exerciseId={historyModalExId} studentId={studentId} exercisesList={exercises} workoutLogs={workoutLogs} onClose={() => setHistoryModalExId(null)} />}
+    </div>
+  );
+}
+
+// --- PLANIFICADOR MENSUAL DEL ADMIN ---
+function AdminMonthlyPlanner({ studentId, users, programs, workoutLogs, onClose, onUpdateDays, onCreateRoutine, onAssignFromLibrary, onEditRoutine }) {
+  const student = users.find(u => u.id === studentId);
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [selectedDayInfo, setSelectedDayInfo] = useState(null);
+
+  const [draggedRoutine, setDraggedRoutine] = useState(null); 
+  const [dragActionModal, setDragActionModal] = useState(null);
+
+  const year = currentDate.getFullYear();
+  const month = currentDate.getMonth();
+
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const firstDayOfMonth = new Date(year, month, 1).getDay();
+  const startDay = firstDayOfMonth === 0 ? 6 : firstDayOfMonth - 1; 
+
+  const prevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
+  const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
+  const goToday = () => setCurrentDate(new Date());
+
+  const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+
+  const myPrograms = programs.filter(p => p.assignedTo === studentId && !p.isTemplate);
+  const libraryPrograms = programs.filter(p => p.isTemplate);
+
+  const getDayData = (dateStr) => {
+    let routines = [];
+    myPrograms.forEach(prog => {
+      if (prog.assignedDates) {
+        Object.keys(prog.assignedDates).forEach(dayId => {
+          if (prog.assignedDates[dayId] === dateStr) {
+            routines.push({ program: prog, day: prog.days.find(d => d.id === dayId) });
+          }
+        });
+      }
+    });
+    const log = workoutLogs.find(l => l.studentId === studentId && l.date === dateStr);
+    return { routines, log };
+  };
+
+  const gridCells = [];
+  for (let i = 0; i < startDay; i++) gridCells.push(null);
+  for (let i = 1; i <= daysInMonth; i++) {
+    const dStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+    gridCells.push({ dayNum: i, dateStr: dStr, data: getDayData(dStr) });
+  }
+
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [activeDateForModal, setActiveDateForModal] = useState(null);
+
+  const handleDragStart = (e, program, dayId, dateStr) => { 
+    e.stopPropagation(); 
+    setDraggedRoutine({ program, dayId, sourceDateStr: dateStr }); 
+    e.dataTransfer.effectAllowed = 'copyMove'; 
+  };
+  const handleDragOver = (e) => { e.preventDefault(); };
+  const handleDrop = (e, targetDateStr) => {
+    e.preventDefault();
+    if (draggedRoutine && draggedRoutine.sourceDateStr !== targetDateStr) {
+      setDragActionModal({ ...draggedRoutine, targetDateStr });
+    }
+    setDraggedRoutine(null);
+  };
+
+  const confirmDragAction = async (action) => {
+    const { program, dayId, sourceDateStr, targetDateStr } = dragActionModal;
+    let newAssignedDates = { ...program.assignedDates };
+    let newDays = [...program.days];
+
+    if (action === 'move') {
+        const keyToRemove = Object.keys(newAssignedDates).find(k => newAssignedDates[k] === sourceDateStr);
+        if (keyToRemove) delete newAssignedDates[keyToRemove];
+        newAssignedDates[dayId] = targetDateStr;
+    } else if (action === 'copy') {
+        const sourceDayObj = program.days.find(d => d.id === dayId);
+        const newDayId = `day-${Date.now()}`;
+        const newDayObj = deepCopy(sourceDayObj);
+        newDayObj.id = newDayId;
+        newDays.push(newDayObj);
+        newAssignedDates[newDayId] = targetDateStr;
+    }
+
+    const updatedProgram = { ...program, days: newDays, assignedDates: newAssignedDates };
+    try {
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'programs', program.id), { ...updatedProgram, updatedAt: new Date().toISOString() }, { merge: true });
+    } catch (err) {
+        console.error(err);
+        alert("Error al mover/copiar rutina.");
+    }
+    setDragActionModal(null);
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-[#1f2937] p-4 rounded-2xl border border-[#374151] shadow-lg sticky top-0 z-10">
+        <div className="flex items-center gap-4">
+          <Button variant="secondary" onClick={onClose} className="px-3 py-2"><ChevronLeft size={20}/></Button>
+          <div className="flex items-center gap-3">
+            <img src={student?.avatarUrl || DEFAULT_AVATAR} className="w-12 h-12 rounded-full object-cover border border-[#374151]" alt="" />
+            <div>
+              <p className="text-xs text-amber-500 font-bold uppercase tracking-widest">Planificando a</p>
+              <h2 className="text-xl font-bold text-white leading-tight">{student?.name}</h2>
+            </div>
+          </div>
+        </div>
+        
+        <div className="w-full md:w-auto flex items-center gap-3 bg-[#111827] px-4 py-2 rounded-xl border border-amber-500/30">
+          <Shield size={18} className="text-amber-500"/>
+          <div className="flex-1">
+            <p className="text-[10px] text-gray-400 uppercase font-bold">Visibilidad del Alumno</p>
+            <select value={student?.calendarViewDays || 7} onChange={(e) => onUpdateDays(e.target.value)} className="bg-transparent text-white text-sm font-bold focus:outline-none w-full">
+              <option value={7}>Ve a 7 Días</option>
+              <option value={14}>Ve a 14 Días</option>
+              <option value={30}>Ve a 1 Mes</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex justify-between items-center">
+        <h3 className="text-2xl font-black text-white capitalize">{monthNames[month]} {year}</h3>
+        <div className="flex items-center gap-2">
+          <button onClick={prevMonth} className="p-2 bg-[#1f2937] text-amber-500 rounded-xl hover:bg-[#374151] border border-[#374151]"><ChevronLeft size={20}/></button>
+          <button onClick={goToday} className="px-4 py-2 bg-[#1f2937] text-white font-bold rounded-xl hover:bg-[#374151] border border-[#374151] text-sm">Hoy</button>
+          <button onClick={nextMonth} className="p-2 bg-[#1f2937] text-amber-500 rounded-xl hover:bg-[#374151] border border-[#374151]"><ChevronRight size={20}/></button>
+        </div>
+      </div>
+
+      <Card className="p-0 border-[#374151]">
+        <div className="grid grid-cols-7 border-b border-[#374151] bg-[#111827]">
+          {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map(day => <div key={day} className="py-3 text-center text-xs font-bold text-gray-400 uppercase tracking-wider border-r border-[#374151] last:border-0">{day}</div>)}
+        </div>
+        <div className="grid grid-cols-7 bg-[#1f2937]">
+          {gridCells.map((cell, idx) => {
+            if (!cell) return <div key={`empty-${idx}`} className="min-h-[100px] border-r border-b border-[#374151]/50 bg-[#111827]/30"></div>;
+            
+            const isToday = cell.dateStr === new Date().toISOString().split('T')[0];
+            const hasLog = !!cell.data.log;
+            const hasRoutine = cell.data.routines.length > 0;
+
+            return (
+              <div 
+                key={cell.dateStr} 
+                onClick={() => {
+                  if (hasLog || hasRoutine) setSelectedDayInfo(cell); 
+                  else { setActiveDateForModal(cell.dateStr); setShowAssignModal(true); }
+                }}
+                onDragOver={handleDragOver}
+                onDrop={(e) => handleDrop(e, cell.dateStr)}
+                className={`min-h-[100px] border-r border-b border-[#374151]/50 p-2 cursor-pointer transition-all hover:bg-[#374151]/50 group relative ${isToday ? 'bg-amber-500/5' : ''}`}
+              >
+                <div className={`text-sm font-bold w-7 h-7 flex items-center justify-center rounded-full ${isToday ? 'bg-amber-500 text-gray-900' : 'text-gray-400'}`}>{cell.dayNum}</div>
+                <div className="mt-2 space-y-1">
+                  {hasLog && <div className="bg-emerald-500/20 text-emerald-400 text-[10px] font-bold px-1.5 py-0.5 rounded border border-emerald-500/30 truncate flex items-center gap-1"><CheckCircle size={10} className="shrink-0"/> Completado</div>}
+                  {!hasLog && cell.data.routines.map((r, i) => (
+                    <div 
+                      key={i} 
+                      draggable 
+                      onDragStart={(e) => handleDragStart(e, r.program, r.day.id, cell.dateStr)}
+                      className="bg-amber-500/20 text-amber-500 text-[10px] font-bold px-1.5 py-0.5 rounded border border-amber-500/30 truncate cursor-grab active:cursor-grabbing z-10 relative"
+                    >
+                      {r.day.name}
+                    </div>
+                  ))}
+                </div>
+                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="bg-[#374151] p-1 rounded-full text-white hover:bg-amber-500 hover:text-gray-900 shadow-lg" onClick={(e) => { e.stopPropagation(); setActiveDateForModal(cell.dateStr); setShowAssignModal(true); }}><Plus size={14}/></div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+
+      {/* Modal de Acciones Drag & Drop */}
+      {dragActionModal && (
+        <div className="fixed inset-0 bg-black/80 z-[110] flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm bg-[#1f2937] border-amber-500 shadow-2xl p-6 text-center rounded-3xl">
+            <Copy size={48} className="mx-auto text-amber-500 mb-4" />
+            <h3 className="text-xl font-bold text-white mb-2">Mover / Copiar Rutina</h3>
+            <p className="text-gray-400 text-sm mb-6">
+                Del {dragActionModal.sourceDateStr.split('-').reverse().join('/')} al {dragActionModal.targetDateStr.split('-').reverse().join('/')}
+            </p>
+            <div className="flex flex-col gap-3">
+              <Button variant="primary" onClick={() => confirmDragAction('copy')} className="py-3">Copiar Día (Dejar original)</Button>
+              <Button variant="secondary" onClick={() => confirmDragAction('move')} className="py-3 border border-amber-500 text-amber-500">Mover Día (Borrar original)</Button>
+              <Button variant="danger" onClick={() => setDragActionModal(null)} className="py-2 mt-2 border-0">Cancelar Acción</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAssignModal && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <Card className="w-full max-w-lg bg-[#1f2937] border-amber-500/50 shadow-2xl flex flex-col max-h-[80vh]">
+            <div className="p-6 border-b border-[#374151] flex justify-between items-center bg-[#111827]">
+              <div><h3 className="text-xl font-bold text-white">Planificar Entrenamiento</h3><p className="text-sm text-amber-500 font-medium">A partir del {new Date(activeDateForModal + 'T00:00:00').toLocaleDateString('es-AR')}</p></div>
+              <button onClick={() => setShowAssignModal(false)} className="text-gray-400 hover:text-white bg-[#374151] p-2 rounded-full"><X size={20}/></button>
+            </div>
+            
+            <div className="p-6 flex-1 overflow-y-auto space-y-6">
+              <div className="bg-[#111827] p-5 rounded-2xl border border-dashed border-[#374151] hover:border-amber-500 transition-colors cursor-pointer flex flex-col items-center justify-center text-center gap-2 group" onClick={() => { setShowAssignModal(false); onCreateRoutine(activeDateForModal); }}>
+                <div className="bg-[#374151] p-3 rounded-full text-amber-500 group-hover:bg-amber-500 group-hover:text-gray-900 transition-colors"><Plus size={24}/></div>
+                <p className="text-white font-bold text-lg mt-2">Crear Rutina Suelta (1 Día)</p>
+                <p className="text-xs text-gray-400">Armá un bloque específico solo para esta fecha.</p>
+              </div>
+              <div className="flex items-center gap-4"><div className="h-px bg-[#374151] flex-1"></div><span className="text-xs text-gray-500 uppercase font-bold tracking-widest">O ASIGNAR DESDE LIBRERÍA</span><div className="h-px bg-[#374151] flex-1"></div></div>
+              <div className="space-y-3">
+                {libraryPrograms.length === 0 ? (
+                  <p className="text-center text-gray-500 text-sm py-4">No tenés programas en tu librería.</p>
+                ) : (
+                  libraryPrograms.map(prog => (
+                    <div key={prog.id} className="bg-[#273243] border border-[#374151] p-4 rounded-xl flex justify-between items-center hover:bg-[#374151] transition-colors">
+                      <div>
+                        <p className="font-bold text-white">{prog.name}</p>
+                        <p className="text-xs text-gray-400 mt-1">{prog.programType === 'program' ? `${prog.weeks} Semanas • Programa` : '1 Día • Workout'}</p>
+                      </div>
+                      <Button variant="primary" onClick={() => { onAssignFromLibrary(prog, activeDateForModal); setShowAssignModal(false); }} className="px-3 py-1.5 text-sm">Asignar</Button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {selectedDayInfo && (
+        <div className="fixed inset-0 bg-black/90 z-50 flex justify-end">
+          <div className="w-full md:w-[500px] h-full bg-[#111827] border-l border-[#374151] flex flex-col animate-in slide-in-from-right">
+            <div className="p-6 border-b border-[#374151] flex justify-between items-center shrink-0">
+              <div><h3 className="text-xl font-bold text-white">Detalle del Día</h3><p className="text-sm text-amber-500">{new Date(selectedDayInfo.dateStr + 'T00:00:00').toLocaleDateString('es-AR')}</p></div>
+              <button onClick={() => setSelectedDayInfo(null)} className="text-gray-400 hover:text-white bg-[#1f2937] p-2 rounded-full"><X size={20}/></button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6">
+              {selectedDayInfo.data.routines.map((rtn, idx) => {
+                const isCompleted = selectedDayInfo.data.log && selectedDayInfo.data.log.programId === rtn.program.id;
+                const log = selectedDayInfo.data.log;
+                return (
+                  <div key={idx} className="mb-8">
+                    <div className="flex justify-between items-start mb-4 border-l-4 border-amber-500 pl-3">
+                      <h4 className="text-lg font-black text-white uppercase tracking-wide">{rtn.day.name}</h4>
+                      {!isCompleted && (
+                        <Button variant="secondary" onClick={() => onEditRoutine(rtn.program, rtn.day.id)} className="py-1 px-3 text-xs border border-gray-600"><Edit size={14}/> Editar Día</Button>
+                      )}
+                    </div>
+                    {isCompleted && (
+                      <div className="bg-emerald-500/10 border border-emerald-500/30 p-4 rounded-xl mb-6 space-y-3">
+                        <div className="flex items-center gap-2 text-emerald-500 font-bold mb-2"><CheckCircle size={18}/> Feedback del Alumno</div>
+                        {log.rpe && <div className="text-sm text-white"><span className="text-gray-400">RPE:</span> {log.rpe}/10</div>}
+                        {log.comments && <div className="text-sm text-gray-300 italic">"{log.comments}"</div>}
+                        {log.photoBase64 && <img src={log.photoBase64} alt="Post workout" className="w-24 h-24 object-cover rounded-lg border border-emerald-500/50 mt-2" />}
+                      </div>
+                    )}
+                    <div className="space-y-4">
+                      {rtn.day.blocks.map((block, i) => (
+                        <div key={i} className="bg-[#1f2937] p-4 rounded-xl border border-[#374151]">
+                          <p className="font-bold text-[#74ACDF] mb-4">{block.name}</p>
+                          <div className="space-y-4">
+                            {block.exercises.map((ex, j) => {
+                              const executedSets = log?.exercises?.[ex.exerciseId] || [];
+
+                              return (
+                                <div key={j} className="bg-[#111827] rounded-lg p-3 border border-[#374151]/50">
+                                  <div className="flex justify-between items-start mb-2">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-white font-bold">{ex.name}</span>
+                                    </div>
+                                    <span className="text-[10px] font-mono bg-[#374151] text-gray-300 px-2 py-1 rounded border border-[#374151]">Plan: {ex.sets}x{ex.reps} {ex.kg ? `@${ex.kg}kg` : ''}</span>
+                                  </div>
+                                  {isCompleted && executedSets.length > 0 && (
+                                    <div className="mt-3 pt-3 border-t border-[#374151]/50 space-y-1">
+                                      <p className="text-[10px] text-emerald-500 font-bold uppercase tracking-widest mb-1.5">Registro del alumno:</p>
+                                      {executedSets.map((set, sIdx) => (
+                                        <div key={sIdx} className="flex items-center justify-between text-xs px-2 py-1.5 rounded bg-[#1f2937]">
+                                          <span className="text-gray-400 font-bold">Serie {sIdx + 1}</span>
+                                          {set.done ? <span className="text-white font-black tracking-wide">{set.kg ? `${set.kg} kg` : '-'} <span className="text-gray-500 mx-1">x</span> {set.reps ? `${set.reps} reps` : '-'}</span> : <span className="text-gray-500 line-through">Omitida</span>}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// --- VISTA CHAT SYSTEM ---
+function ChatView({ currentUserData, currentUserId, role, users, messages, db, appId }) {
+  const [msg, setMsg] = useState('');
+  const scrollRef = useRef(null);
+  const [selectedStudentId, setSelectedStudentId] = useState(null);
+
+  const activeRoomId = role === 'alumno' ? currentUserId : selectedStudentId;
+  const activeChatPartner = users.find(u => u.id === (role === 'alumno' ? users.find(x=>x.role==='admin')?.id : selectedStudentId));
+  const roomMessages = messages.filter(m => m.roomId === activeRoomId).sort((a,b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+  useEffect(() => {
+    if(scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [roomMessages, selectedStudentId]);
+
+  const handleSendMessage = async (e) => {
+    e.preventDefault();
+    if(!msg.trim() || !activeRoomId) return;
+    
+    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'messages'), {
+      roomId: activeRoomId, senderId: currentUserId, senderName: currentUserData.name,
+      text: msg.trim(), timestamp: new Date().toISOString()
+    });
+    setMsg('');
+  };
+
+  const alumnos = users.filter(u => u.role === 'alumno');
+
+  return (
+    <div className="flex flex-col md:flex-row h-[75vh] md:h-[80vh] bg-[#1f2937] border border-[#374151] rounded-2xl overflow-hidden shadow-2xl relative">
+      {role !== 'alumno' && (
+        <div className="w-full md:w-1/3 border-b md:border-b-0 md:border-r border-[#374151] bg-[#111827] flex flex-col max-h-[30vh] md:max-h-full">
+          <div className="p-4 border-b border-[#374151]"><h3 className="text-white font-bold">Mensajes Alumnos</h3></div>
+          <div className="flex-1 overflow-y-auto">
+            {alumnos.map(al => (
+              <button key={al.id} onClick={() => setSelectedStudentId(al.id)} className={`w-full flex items-center gap-3 p-4 border-b border-[#374151] hover:bg-[#1f2937] transition-colors ${selectedStudentId === al.id ? 'bg-[#1f2937] border-l-4 border-l-amber-500' : ''}`}>
+                <img src={al.avatarUrl || DEFAULT_AVATAR} className="w-10 h-10 rounded-full object-cover border border-[#374151]" alt="" />
+                <div className="text-left"><p className="text-white font-bold text-sm truncate">{al.name}</p></div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      <div className="flex-1 flex flex-col bg-[#111827] relative h-full">
+        {!activeRoomId ? (
+          <div className="flex-1 flex flex-col items-center justify-center text-gray-500"><MessageCircle size={48} className="mb-4 opacity-50" /><p>Seleccioná un alumno para chatear.</p></div>
+        ) : (
+          <>
+            <div className="p-4 bg-[#1f2937] border-b border-[#374151] flex items-center gap-3 shadow-md z-10 shrink-0">
+              <img src={activeChatPartner?.avatarUrl || DEFAULT_AVATAR} className="w-10 h-10 rounded-full object-cover border border-amber-500" alt="" />
+              <div><p className="text-white font-bold">{activeChatPartner?.name || 'Profe'}</p><p className="text-xs text-emerald-500 flex items-center gap-1"><span className="w-2 h-2 bg-emerald-500 rounded-full"></span> En línea</p></div>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-4" ref={scrollRef}>
+              {roomMessages.length === 0 && <p className="text-center text-gray-500 mt-10">Iniciá la conversación...</p>}
+              {roomMessages.map(msgObj => {
+                const isMe = msgObj.senderId === currentUserId;
+                return (
+                  <div key={msgObj.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+                    <div className={`max-w-[80%] p-3 rounded-2xl shadow-md ${isMe ? 'bg-amber-500 text-gray-900 rounded-br-none' : 'bg-[#374151] text-white rounded-bl-none'}`}><p className="text-sm font-medium leading-relaxed">{msgObj.text}</p></div>
+                    <span className="text-[10px] text-gray-500 mt-1 px-1">{new Date(msgObj.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                  </div>
+                );
+              })}
+            </div>
+            <form onSubmit={handleSendMessage} className="p-3 pb-8 md:pb-3 bg-[#1f2937] border-t border-[#374151] flex gap-2 shrink-0">
+              <input type="text" value={msg} onChange={e=>setMsg(e.target.value)} placeholder="Escribí un mensaje..." className="flex-1 bg-[#111827] text-white rounded-full px-5 py-3 border border-[#374151] focus:outline-none focus:border-amber-500" />
+              <button type="submit" disabled={!msg.trim()} className="bg-amber-500 text-gray-900 p-3 rounded-full hover:bg-amber-400 disabled:opacity-50 transition-all shadow-lg"><Send size={20} className="ml-1" /></button>
+            </form>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ExerciseHistoryModal({ exerciseId, studentId, exercisesList, workoutLogs, onClose }) {
+  const exInfo = exercisesList.find(e => e.id === exerciseId);
+  const historyData = useMemo(() => {
+    if (!studentId) return [];
+    const data = [];
+    const relevantLogs = workoutLogs.filter(l => l.studentId === studentId && l.exercises && l.exercises[exerciseId]);
+    relevantLogs.forEach(log => {
+      let maxKg = 0;
+      log.exercises[exerciseId].forEach(s => { if(s.done && s.kg) { const k = parseFloat(s.kg); if (k > maxKg) maxKg = k; } });
+      if(maxKg > 0) data.push({ date: log.date, maxKg });
+    });
+    return data.sort((a,b) => new Date(a.date) - new Date(b.date));
+  }, [workoutLogs, exerciseId, studentId]);
+
+  return (
+    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+      <Card className="w-full max-w-md bg-[#1f2937] border-amber-500/50 flex flex-col p-6 shadow-2xl">
+        <div className="flex justify-between items-center mb-6 border-b border-[#374151] pb-4">
+          <div><h3 className="text-xl font-bold text-white pr-4">{exInfo?.name}</h3><p className="text-xs font-bold text-amber-500 uppercase tracking-widest mt-1">Historial del Alumno</p></div>
+          <button onClick={onClose} className="text-gray-400 hover:text-white bg-[#374151] p-2 rounded-full shrink-0"><X size={20}/></button>
+        </div>
+        {!studentId ? <p className="text-gray-400 text-center py-10">Seleccioná un alumno primero para ver su historial.</p> : historyData.length === 0 ? <p className="text-gray-400 text-center py-10">Sin registros previos para este alumno.</p> : (
+          <div className="h-56 bg-[#111827] p-4 rounded-xl border border-[#374151]">
+            <ResponsiveContainer width="100%" height="100%">
+              <RechartsLineChart data={historyData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" vertical={false} />
+                <XAxis dataKey="date" stroke="#9ca3af" tick={{fontSize: 10}} />
+                <YAxis stroke="#9ca3af" tick={{fontSize: 10}} />
+                <RechartsTooltip contentStyle={{backgroundColor:'#1f2937', borderColor:'#f59e0b'}} />
+                <Line type="monotone" dataKey="maxKg" stroke="#f59e0b" strokeWidth={4} dot={{r: 5, fill: '#f59e0b'}} />
+              </RechartsLineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+function UsersManagement({ users, onViewPlanner }) {
+  const alumnos = users.filter(u => u.role === 'alumno');
+  return (
+    <div className="space-y-6">
+      <h2 className="text-3xl font-bold text-white mb-6">Mis Alumnos</h2>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {alumnos.map(u => (
+          <Card key={u.id} className="p-4 flex flex-col gap-4 border-l-4 border-l-[#74ACDF]">
+            <div className="flex items-center gap-4">
+              <img src={u.avatarUrl || DEFAULT_AVATAR} className="w-12 h-12 rounded-full object-cover border border-[#374151]" alt="" />
+              <div><p className="font-bold text-white text-lg">{u.name}</p><p className="text-sm text-gray-500">ID: {u.id.substring(0,6)}</p></div>
+            </div>
+            <Button onClick={() => onViewPlanner(u.id)} variant="primary" className="w-full flex justify-between items-center py-3">Planificar Mes <Calendar size={18}/></Button>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
