@@ -1,4 +1,4 @@
-{import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Dumbbell, Users, CalendarDays, LineChart, Plus, Trash2, 
   Brain, Save, Activity, Target, CheckCircle, Info, Lock, Play,
@@ -6,36 +6,24 @@ import {
   Camera, MessageSquare, Star, Edit, Eye, Shield, ArrowUpRight,
   MessageCircle, Send, RotateCw, Timer, Weight, ListPlus, AlignLeft,
   Library, Calendar, Video, Utensils, FileText, ClipboardList, BookOpen, ThumbsUp,
-  Youtube, Search, Copy, Move, ChevronDown, ChevronUp, ExternalLink, LogOut
+  Youtube, Search, Copy, Move, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { 
   LineChart as RechartsLineChart, Line, XAxis, YAxis, CartesianGrid, 
   Tooltip as RechartsTooltip, ResponsiveContainer, RadialBarChart, RadialBar
 } from 'recharts';
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import { 
-  getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut 
-} from 'firebase/auth';
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
 import { 
   getFirestore, collection, onSnapshot, doc, setDoc, addDoc, getDocs, deleteDoc
 } from 'firebase/firestore';
 
-// ============================================================================
-// CONFIGURACIÓN DE FIREBASE (Tus datos reales conectados)
-// ============================================================================
-const firebaseConfig = {
-  apiKey: "AIzaSyA5EIoQCRnMSinHy7bWejEHHiLRT8FtGcQ",
-  authDomain: "coronados-de-gloria-2-0.firebaseapp.com",
-  projectId: "coronados-de-gloria-2-0",
-  storageBucket: "coronados-de-gloria-2-0.firebasestorage.app",
-  messagingSenderId: "35540492006",
-  appId: "1:35540492006:web:bfca94571ea6a39aeae527"
-};
-
-const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+// --- CONFIGURACIÓN DE FIREBASE ---
+const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const appId = 'coronados-app-v3';
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'coronados-app';
 
 // --- CONSTANTES, MARCA Y UTILIDADES ---
 const LOGO_URL = "https://placehold.co/400x400/111827/f59e0b?text=CDG"; 
@@ -51,9 +39,11 @@ const deepCopy = (obj) => {
 // ALGORITMO MEJORADO PARA LIMPIAR URLs SUCÍAS DE YOUTUBE
 const getYoutubeEmbedUrl = (url) => {
   if (!url) return null;
+  // Esta regex es invencible: agarra links web, móviles, shorts y limpia la basura de tracking (&pp=...)
   const regExp = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/|youtube\.com\/shorts\/)([^"&?\/\s]{11})/i;
   const match = url.match(regExp);
-  return match ? `https://www.youtube-nocookie.com/embed/${match[1]}?rel=0&modestbranding=1` : null;
+  // Le agregamos modestbranding=1 para que no joda tanto el logo de YT y rel=0 para evitar videos random al final
+  return match ? `https://www.youtube.com/embed/${match[1]}?rel=0&modestbranding=1` : null;
 };
 
 const compressImage = (file, maxWidth = 800) => {
@@ -119,7 +109,7 @@ const Select = ({ label, options, ...props }) => (
   </div>
 );
 
-// MODAL GLOBAL PARA REPRODUCIR VIDEOS SIN SALIR DE LA APP
+// NUEVO: MODAL GLOBAL PARA REPRODUCIR VIDEOS SIN SALIR DE LA APP
 const VideoPlayerModal = ({ videoUrl, onClose }) => {
   const embedUrl = getYoutubeEmbedUrl(videoUrl);
   if (!embedUrl) return null;
@@ -147,88 +137,65 @@ const VideoPlayerModal = ({ videoUrl, onClose }) => {
   );
 };
 
-// --- PANTALLA DE LOGIN CON CONEXIÓN A BD ---
-function LoginScreen({ db, appId, auth }) {
-  const [isLogin, setIsLogin] = useState(true);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
+// --- SEEDING INICIAL DE DATOS ---
+const seedDatabase = async (uid) => {
+  try {
+    const usersRef = collection(db, 'artifacts', appId, 'public', 'data', 'users');
+    const snap = await getDocs(usersRef);
+    
+    if (snap.empty) {
+      console.log("Creando base de datos inicial...");
+      const testStudentId = 'test-student-123';
+      await setDoc(doc(usersRef, testStudentId), { name: 'Yani (Alumna)', role: 'alumno', calendarViewDays: 7, avatarUrl: '', createdAt: new Date().toISOString() });
+      await setDoc(doc(usersRef, uid), { name: 'Nico (Admin)', role: 'admin', avatarUrl: '', createdAt: new Date().toISOString() });
 
-    try {
-      if (isLogin) {
-        await signInWithEmailAndPassword(auth, email, password);
-      } else {
-        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        const newUser = userCredential.user;
-        
-        let assignedRole = 'alumno';
-        if (email.toLowerCase() === 'nfarias.entrenador@gmail.com') {
-          assignedRole = 'admin';
-        }
+      const exRef = collection(db, 'artifacts', appId, 'public', 'data', 'exercises');
+      // Les agregué videos de prueba a los primeros para que veas la función andando
+      const ex1 = await addDoc(exRef, { name: 'Sentadilla Libre', primaryMuscle: 'cuádriceps', equipment: 'Barra', videoUrl: 'https://www.youtube.com/watch?v=gcNh17Ckjgg' });
+      const ex2 = await addDoc(exRef, { name: 'Press de Banca', primaryMuscle: 'pecho', equipment: 'Barra', videoUrl: 'https://www.youtube.com/watch?v=rxD321l2svE' });
+      const ex3 = await addDoc(exRef, { name: 'Dominadas', primaryMuscle: 'espalda', equipment: 'Ninguno' });
 
-        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', newUser.uid), {
-          name: name || email.split('@')[0],
-          email: email.toLowerCase(),
-          role: assignedRole,
-          calendarViewDays: 7,
-          avatarUrl: '',
-          createdAt: new Date().toISOString()
-        });
-      }
-    } catch (err) {
-      console.error(err);
-      if (err.code === 'auth/email-already-in-use') setError('Este correo ya está registrado. Intentá iniciar sesión.');
-      else if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') setError('Correo o contraseña incorrectos.');
-      else if (err.code === 'auth/user-not-found') setError('No existe una cuenta con ese correo.');
-      else if (err.code === 'auth/weak-password') setError('La contraseña debe tener al menos 6 caracteres.');
-      else setError('Ocurrió un error. Revisá los datos y volvé a intentar.');
+      const progRef = collection(db, 'artifacts', appId, 'public', 'data', 'programs');
+      
+      await addDoc(progRef, {
+        name: 'Workout: FullBody Express', description: 'Rutina rápida de 1 solo día.',
+        isTemplate: true, programType: 'workout', creatorId: uid, createdAt: new Date().toISOString(), weeks: 1,
+        days: [{ id: '0', name: 'FullBody A', blocks: [{ id: 101, name: 'BLOQUE 1', exercises: [{ exerciseId: ex1.id, name: 'Sentadilla Libre', sets: '3', reps: '10', rest: '90s', kg: '', rpe: '7' }] }] }]
+      });
+
+      await addDoc(progRef, {
+        name: 'Plantilla: Fuerza 2 Semanas', description: 'Mesociclo de adaptación.',
+        isTemplate: true, programType: 'program', creatorId: uid, createdAt: new Date().toISOString(), weeks: 2,
+        days: [
+          { id: '0', name: 'Día 1 - Piernas', blocks: [{ id: 101, name: 'FUERZA', exercises: [{ exerciseId: ex1.id, name: 'Sentadilla Libre', sets: '4', reps: '8', rest: '120s' }] }] },
+          { id: '2', name: 'Día 2 - Pecho', blocks: [{ id: 102, name: 'FUERZA', exercises: [{ exerciseId: ex2.id, name: 'Press de Banca', sets: '4', reps: '8', rest: '120s' }] }] }
+        ]
+      });
+
+      const today = new Date();
+      const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
+      const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
+      const formatDate = (d) => d.toISOString().split('T')[0];
+
+      await addDoc(progRef, {
+        name: 'Mesociclo de Yani', description: 'Enfoque en básicos pesados.',
+        assignedTo: testStudentId, isTemplate: false, programType: 'program', creatorId: uid, createdAt: new Date().toISOString(),
+        assignedDates: { 'day-1': formatDate(yesterday), 'day-2': formatDate(today), 'day-3': formatDate(tomorrow) },
+        days: [
+          { id: 'day-1', name: 'Día 1: Empuje', blocks: [{ id: 101, name: 'FUERZA', exercises: [{ exerciseId: ex2.id, name: 'Press de Banca', sets: '4', reps: '5', rest: '120s', kg: '40', rpe: '8' }] }] },
+          { id: 'day-2', name: 'Día 2: Tirón (HOY)', blocks: [{ id: 201, name: 'HIPERTROFIA', exercises: [{ exerciseId: ex3.id, name: 'Dominadas', sets: '3', reps: '8', rest: '90s', kg: '', rpe: '8' }] }] },
+          { id: 'day-3', name: 'Día 3: Piernas', blocks: [{ id: 301, name: 'BÁSICO INFERIOR', exercises: [{ exerciseId: ex1.id, name: 'Sentadilla Libre', sets: '5', reps: '10', rest: '120s', kg: '60', rpe: '8' }] }] }
+        ]
+      });
+
+      const msgRef = collection(db, 'artifacts', appId, 'public', 'data', 'messages');
+      await addDoc(msgRef, { roomId: testStudentId, senderId: uid, senderName: 'Nico (Admin)', text: '¡Hola Yani! Ya tenés la planificación armada. ¡Con todo!', timestamp: new Date().toISOString() });
     }
-    setLoading(false);
-  };
+  } catch (error) { console.error("Error en el seeding inicial:", error); }
+};
 
-  return (
-    <div className="min-h-[100dvh] bg-[#111827] flex items-center justify-center p-6 relative overflow-hidden">
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-amber-500/10 rounded-full blur-[120px] pointer-events-none"></div>
-      <Card className="max-w-md w-full p-10 flex flex-col gap-6 relative z-10 border-amber-500/20 shadow-2xl rounded-[3rem] bg-[#1f2937]/90 backdrop-blur-xl">
-        <div className="text-center flex flex-col items-center mb-4">
-          <h1 className="text-5xl font-black text-white italic tracking-tighter leading-none">CORONADOS</h1>
-          <div className="flex items-center justify-center gap-2 mt-2 w-full">
-            <div className="h-[2px] bg-amber-500 flex-1"></div>
-            <span className="text-amber-500 font-black tracking-[0.4em] text-[10px] uppercase">De Gloria</span>
-            <div className="h-[2px] bg-amber-500 flex-1"></div>
-          </div>
-        </div>
-        
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          {!isLogin && (
-            <input type="text" placeholder="NOMBRE COMPLETO" className="w-full bg-[#111827] border border-gray-700 rounded-2xl px-6 py-4 text-white font-bold focus:outline-none focus:border-amber-500" value={name} onChange={e => setName(e.target.value)} required />
-          )}
-          <input type="email" placeholder="CORREO ELECTRÓNICO" className="w-full bg-[#111827] border border-gray-700 rounded-2xl px-6 py-4 text-white font-bold focus:outline-none focus:border-amber-500" value={email} onChange={e => setEmail(e.target.value)} required />
-          <input type="password" placeholder="CONTRASEÑA" className="w-full bg-[#111827] border border-gray-700 rounded-2xl px-6 py-4 text-white font-bold focus:outline-none focus:border-amber-500" value={password} onChange={e => setPassword(e.target.value)} required />
-          
-          {error && <p className="text-red-400 text-xs font-bold text-center bg-red-500/10 p-3 rounded-xl border border-red-500/20">{error}</p>}
-          
-          <button type="submit" className="w-full py-4 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 text-gray-900 font-black uppercase tracking-widest mt-2 shadow-lg hover:scale-[1.02] active:scale-95 transition-all" disabled={loading}>
-            {loading ? 'PROCESANDO...' : (isLogin ? 'Iniciar Sesión' : 'Registrarme')}
-          </button>
-        </form>
-
-        <button onClick={() => { setIsLogin(!isLogin); setError(''); }} className="w-full mt-2 text-xs text-gray-500 hover:text-amber-500 transition-colors font-black uppercase tracking-widest">
-            {isLogin ? '¿No tenés cuenta? Registrate acá' : '¿Ya sos parte? Iniciá sesión'}
-        </button>
-      </Card>
-    </div>
-  );
-}
-
-// --- APP PRINCIPAL (CONTENEDOR) ---
+// --- APP PRINCIPAL ---
 export default function App() {
   const [user, setUser] = useState(null);
   const [users, setUsers] = useState([]);
@@ -238,17 +205,27 @@ export default function App() {
   const [messages, setMessages] = useState([]);
   
   const [currentView, setCurrentView] = useState('dashboard');
+  const [myRole, setMyRole] = useState(null); 
+  const [customUserId, setCustomUserId] = useState(null); 
+  
   const [viewingStudentId, setViewingStudentId] = useState(null);
   const [editingProgram, setEditingProgram] = useState(null);
   const [dayBuilderConfig, setDayBuilderConfig] = useState(null);
-  const [authLoading, setAuthLoading] = useState(true);
 
-  const currentUserData = users.find(u => u.id === user?.uid);
+  const currentUserId = customUserId || user?.uid;
+  const currentUserData = users.find(u => u.id === currentUserId) || { role: myRole, name: 'Usuario', calendarViewDays: 7, avatarUrl: '' };
 
   useEffect(() => {
+    const initAuth = async () => {
+      try {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) await signInWithCustomToken(auth, __initial_auth_token);
+        else await signInAnonymously(auth);
+      } catch (error) { console.error("Error Auth:", error); }
+    };
+    initAuth();
     const unsubscribe = onAuthStateChanged(auth, async (u) => {
       setUser(u);
-      setAuthLoading(false);
+      if (u) await seedDatabase(u.uid);
     });
     return () => unsubscribe();
   }, []);
@@ -276,18 +253,27 @@ export default function App() {
     return () => { unsubUsers(); unsubExer(); unsubProg(); unsubLogs(); unsubMsgs(); };
   }, [user]);
 
-  const handleAvatarUpload = async (e) => {
-    const file = e.target.files[0];
-    if(!file || !user?.uid) return;
-    const base64 = await compressImage(file, 400); 
-    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', user.uid), { avatarUrl: base64 }, { merge: true });
+  const handleSetRole = async (role, name, isTestStudent = false) => {
+    if (!user) return;
+    if (isTestStudent) {
+      setCustomUserId('test-student-123'); setMyRole('alumno');
+    } else {
+      setMyRole(role);
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', user.uid), { name, role, calendarViewDays: 7, avatarUrl: '', createdAt: new Date().toISOString() }, { merge: true });
+    }
   };
 
-  if (authLoading) return <div className="min-h-[100dvh] bg-[#111827] text-amber-500 flex items-center justify-center font-bold text-xl"><Activity className="animate-spin mr-3"/> Cargando Coronados de Gloria...</div>;
-  if (!user) return <LoginScreen db={db} appId={appId} auth={auth} />;
-  if (!currentUserData) return <div className="min-h-[100dvh] bg-[#111827] text-white flex items-center justify-center font-bold text-xl">Sincronizando perfil...</div>;
+  const handleAvatarUpload = async (e) => {
+    const file = e.target.files[0];
+    if(!file || !currentUserId) return;
+    const base64 = await compressImage(file, 400); 
+    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', currentUserId), { avatarUrl: base64 }, { merge: true });
+  };
 
-  const role = currentUserData.role;
+  if (!user) return <div className="min-h-[100dvh] bg-[#111827] text-white flex items-center justify-center">Cargando Coronados de Gloria...</div>;
+  if (!currentUserData.role && !myRole) return <RoleSelector onSelect={handleSetRole} />;
+
+  const role = currentUserData.role || myRole;
 
   const navItems = [
     { id: 'dashboard', label: 'Inicio', icon: Activity, roles: ['admin', 'profesor', 'alumno'] },
@@ -326,9 +312,6 @@ export default function App() {
               </button>
             );
           })}
-          <button onClick={() => signOut(auth)} className="flex-shrink-0 md:w-full flex items-center justify-center md:justify-start gap-3 px-4 py-3 rounded-xl transition-all text-red-400 hover:bg-red-500/10 hover:text-red-300 md:mt-auto md:mb-4 snap-center">
-            <LogOut size={20} /> <span className="md:block">Cerrar Sesión</span>
-          </button>
         </nav>
       </aside>
 
@@ -345,7 +328,7 @@ export default function App() {
           )}
           
           {currentView === 'student_calendar' && role === 'alumno' && (
-            <StudentCalendarView programs={programs} currentUserId={user.uid} currentUserData={currentUserData} exercises={exercises} workoutLogs={workoutLogs} />
+            <StudentCalendarView programs={programs} currentUserId={currentUserId} currentUserData={currentUserData} exercises={exercises} workoutLogs={workoutLogs} />
           )}
 
           {currentView === 'admin_planner' && role !== 'alumno' && viewingStudentId && (
@@ -353,11 +336,13 @@ export default function App() {
               studentId={viewingStudentId} users={users} programs={programs} workoutLogs={workoutLogs} exercisesList={exercises}
               onClose={() => { setViewingStudentId(null); setCurrentView('users'); }}
               onUpdateDays={async (days) => { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', viewingStudentId), { calendarViewDays: Number(days) }, { merge: true }); }}
+              // Crear rutina de 1 día (Workout)
               onCreateRoutine={(date) => { 
                 setEditingProgram({ name: `Entrenamiento`, isTemplate: false, programType: 'workout', assignedTo: viewingStudentId, weeks: 1, days: [] });
                 setDayBuilderConfig({ targetDate: date, relativeDayId: '0', sourceContext: 'admin_planner' }); 
                 setCurrentView('day_builder'); 
               }}
+              // Asignar desde librería (usando DEEP COPY para evitar vinculos)
               onAssignFromLibrary={async (templateProg, date) => {
                 const assignedDates = {};
                 templateProg.days.forEach(day => {
@@ -373,6 +358,7 @@ export default function App() {
                 delete newProg.id;
                 await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'programs'), newProg);
               }}
+              // Editar día existente desde el calendario del alumno
               onEditRoutine={(program, dayId) => {
                 setEditingProgram(deepCopy(program));
                 setDayBuilderConfig({ relativeDayId: dayId, sourceContext: 'admin_planner' });
@@ -397,7 +383,7 @@ export default function App() {
           )}
 
           {currentView === 'chat' && (
-            <ChatView currentUserData={currentUserData} currentUserId={user.uid} role={role} users={users} messages={messages} db={db} appId={appId} />
+            <ChatView currentUserData={currentUserData} currentUserId={currentUserId} role={role} users={users} messages={messages} />
           )}
 
           {currentView === 'macro_builder' && (
@@ -468,7 +454,34 @@ export default function App() {
   );
 }
 
-// --- VISTAS ADMIN ---
+// --- PANTALLA DE LOGIN ---
+function RoleSelector({ onSelect }) {
+  const [name, setName] = useState('');
+  return (
+    <div className="min-h-[100dvh] bg-[#111827] flex items-center justify-center p-4 relative overflow-hidden">
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-amber-500/10 rounded-full blur-[120px] pointer-events-none"></div>
+      <Card className="max-w-md w-full p-8 flex flex-col gap-6 relative z-10 border-amber-500/30 shadow-2xl">
+        <div className="text-center flex flex-col items-center">
+          <img src={LOGO_URL} alt="Logo" className="w-28 h-28 object-contain mb-2 drop-shadow-[0_0_15px_rgba(245,158,11,0.5)]" onError={(e)=>{e.target.style.display='none'}}/>
+          <h2 className="text-3xl font-black text-white uppercase tracking-tight">Coronados<br/><span className="text-amber-500">De Gloria</span></h2>
+        </div>
+        <div className="bg-[#111827] p-4 rounded-xl border border-[#374151]">
+          <Button onClick={() => onSelect('alumno', 'Alumno', true)} variant="success" className="w-full py-3 shadow-[0_0_15px_rgba(16,185,129,0.2)] text-lg">Entrar como Alumno de Prueba</Button>
+        </div>
+        <div className="flex items-center gap-4"><div className="h-px bg-[#374151] flex-1"></div><span className="text-xs text-gray-500 uppercase font-bold">O Staff</span><div className="h-px bg-[#374151] flex-1"></div></div>
+        <div className="flex flex-col gap-3">
+          <Input value={name} onChange={e => setName(e.target.value)} placeholder="Tu Nombre (Ej: Nico)" className="text-center" />
+          <div className="grid grid-cols-2 gap-3">
+            <Button onClick={() => onSelect('admin', name)} variant="primary" disabled={!name}>Admin</Button>
+            <Button onClick={() => onSelect('profesor', name)} variant="secondary" disabled={!name}>Profe</Button>
+          </div>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+// --- VISTA DASHBOARD ADMIN ---
 function AdminDashboardView({ users, programs, onGoToLibrary }) {
   const activeAssignments = programs.filter(p => !p.isTemplate && p.assignedTo);
   return (
@@ -496,7 +509,7 @@ function AdminDashboardView({ users, programs, onGoToLibrary }) {
   );
 }
 
-// --- VISTA LIBRERÍA ---
+// --- VISTA LIBRERÍA INTEGRADA ---
 function LibraryView({ exercises, programs, onGoToMacroBuilder, onGoToMicroBuilder }) {
   const [activeSection, setActiveSection] = useState(null);
 
@@ -546,7 +559,7 @@ function LibraryView({ exercises, programs, onGoToMacroBuilder, onGoToMicroBuild
   );
 }
 
-// --- GESTORES DE LIBRERÍA ---
+// --- GESTOR DE EJERCICIOS Y MODAL DE CREACIÓN/EDICIÓN ---
 function ExercisesManager({ exercises, onBack }) {
   const [editingExercise, setEditingExercise] = useState(null); 
   const [searchTerm, setSearchTerm] = useState('');
@@ -595,7 +608,9 @@ function ExercisesManager({ exercises, onBack }) {
         ))}
       </div>
 
-      {editingExercise !== null && <ExerciseModal initialData={editingExercise} onClose={() => setEditingExercise(null)} />}
+      {editingExercise !== null && (
+        <ExerciseModal initialData={editingExercise} onClose={() => setEditingExercise(null)} />
+      )}
     </div>
   );
 }
@@ -605,9 +620,11 @@ function ExerciseModal({ initialData, onClose }) {
   const [mediaType, setMediaType] = useState(initialData?.mediaType || (initialData?.videoUrl ? 'url' : 'none'));
   const [videoUrl, setVideoUrl] = useState(initialData?.videoUrl || '');
   const [instructions, setInstructions] = useState(initialData?.instructions || '');
+  
   const [primaryMuscle, setPrimaryMuscle] = useState(initialData?.primaryMuscle || '');
   const [equipment, setEquipment] = useState(initialData?.equipment || '');
   const [level, setLevel] = useState(initialData?.level || '');
+  
   const [openSection, setOpenSection] = useState('muscle'); 
   const [isSaving, setIsSaving] = useState(false);
 
@@ -620,7 +637,9 @@ function ExerciseModal({ initialData, onClose }) {
   const handleSave = async () => {
     if (!name.trim()) return;
     setIsSaving(true);
-    const dataObj = { name: name.trim(), mediaType, videoUrl: mediaType === 'url' ? videoUrl : '', instructions, primaryMuscle, equipment, level, updatedAt: new Date().toISOString() };
+    const dataObj = { 
+      name: name.trim(), mediaType, videoUrl: mediaType === 'url' ? videoUrl : '', instructions, primaryMuscle, equipment, level, updatedAt: new Date().toISOString() 
+    };
     try {
       if (initialData.id) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'exercises', initialData.id), dataObj, { merge: true });
       else await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'exercises'), { ...dataObj, createdAt: new Date().toISOString() });
@@ -644,15 +663,18 @@ function ExerciseModal({ initialData, onClose }) {
   return (
     <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center sm:p-6 backdrop-blur-sm">
       <div className="w-full h-full sm:h-auto sm:max-h-[90vh] sm:max-w-2xl bg-[#1f2937] sm:rounded-2xl sm:border border-[#374151] flex flex-col shadow-2xl animate-in slide-in-from-bottom-8 sm:slide-in-from-bottom-4 duration-300">
+        
         <div className="flex items-center justify-between p-5 border-b border-[#374151] bg-[#111827] shrink-0 sm:rounded-t-2xl">
           <h2 className="text-xl font-bold text-white">{initialData?.id ? 'Editar un ejercicio' : 'Crear un ejercicio'}</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors"><X size={24}/></button>
         </div>
+
         <div className="flex-1 overflow-y-auto p-5 md:p-8 space-y-8 bg-[#1f2937] hide-scrollbar">
           <div>
             <label className="block text-sm font-bold text-gray-300 mb-2">Nombre del ejercicio</label>
             <input type="text" placeholder="Ej: Remo con barra" value={name} onChange={e=>setName(e.target.value)} className="w-full bg-[#111827] border border-[#374151] rounded-lg px-4 py-3 text-white focus:outline-none focus:border-amber-500 transition-colors" />
           </div>
+
           <div>
             <label className="block text-sm font-bold text-gray-300 mb-3">¿Quieres añadir un vídeo o una imagen?</label>
             <div className="space-y-3 mb-4">
@@ -660,52 +682,107 @@ function ExerciseModal({ initialData, onClose }) {
               <RadioOption label="Subir imagen (Pronto)" checked={mediaType === 'image'} onChange={() => {}} disabled />
               <RadioOption label="No subir vídeo ni imagen" checked={mediaType === 'none'} onChange={() => setMediaType('none')} />
             </div>
+
             {mediaType === 'url' && (
               <div className="mt-4">
                 <p className="text-xs font-bold text-gray-400 mb-2">Añade una URL válida de Youtube</p>
                 <input type="text" placeholder="Ej: https://www.youtube.com/watch?v=..." value={videoUrl} onChange={e=>setVideoUrl(e.target.value)} className="w-full bg-[#111827] border border-[#374151] rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-amber-500 text-sm mb-4" />
-                <div className="w-full max-w-sm mx-auto aspect-video bg-[#000] border border-[#374151] rounded-lg flex flex-col items-center justify-center overflow-hidden relative">
-                  {embedUrl ? <iframe width="100%" height="100%" src={embedUrl} title="YouTube video preview" frameBorder="0" sandbox="allow-same-origin allow-scripts allow-presentation allow-popups allow-popups-to-escape-sandbox" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen></iframe> : <p className="text-gray-500 font-medium text-sm text-center px-4 flex flex-col items-center"><Youtube size={24} className="mb-2 opacity-50" />Ingresá un link para previsualizar</p>}
+                
+                <div className="w-full max-w-sm mx-auto aspect-video bg-[#000] border border-[#374151] rounded-lg flex items-center justify-center overflow-hidden">
+                  {embedUrl ? (
+                    <iframe 
+                      width="100%" height="100%" 
+                      src={embedUrl} title="YouTube video preview" frameBorder="0" 
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
+                      referrerPolicy="strict-origin-when-cross-origin"
+                      allowFullScreen>
+                    </iframe>
+                  ) : (
+                    <p className="text-gray-500 font-medium text-sm text-center px-4 flex flex-col items-center">
+                      <Youtube size={24} className="mb-2 opacity-50" />
+                      Ingresá un link para previsualizar
+                    </p>
+                  )}
                 </div>
               </div>
             )}
           </div>
+
           <div>
             <label className="block text-sm font-bold text-gray-300 mb-2">Instrucciones (opcional)</label>
             <textarea placeholder="Ej: Para iniciar el movimiento debemos colocarnos de pie..." value={instructions} onChange={e=>setInstructions(e.target.value)} className="w-full bg-[#111827] border border-[#374151] rounded-lg px-4 py-3 text-white text-sm focus:outline-none focus:border-amber-500 min-h-[100px]" />
           </div>
+
           <div className="border-t border-[#374151] pt-2">
             <div className="border-b border-[#374151]">
               <button onClick={() => toggleSection('muscle')} className="w-full flex justify-between items-center py-4 text-gray-300 hover:text-white transition-colors">
-                <span className="font-bold flex items-center gap-2">Músculo principal {primaryMuscle && <span className="bg-amber-500/20 text-amber-500 text-[10px] uppercase px-2 py-0.5 rounded-full">{primaryMuscle}</span>}</span>{openSection === 'muscle' ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                <span className="font-bold flex items-center gap-2">Músculo principal {primaryMuscle && <span className="bg-amber-500/20 text-amber-500 text-[10px] uppercase px-2 py-0.5 rounded-full">{primaryMuscle}</span>}</span>
+                {openSection === 'muscle' ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
               </button>
               {openSection === 'muscle' && (
-                <div className="pb-5 flex flex-wrap gap-2">{muscleOptions.map(m => <button key={m} onClick={() => setPrimaryMuscle(primaryMuscle === m ? '' : m)} className={`px-3 py-1.5 rounded-full text-xs font-bold capitalize transition-all border ${primaryMuscle === m ? 'bg-amber-500 text-gray-900 border-amber-500 shadow-md' : 'bg-transparent text-gray-400 border-gray-600 hover:border-gray-400'}`}>{m}</button>)}</div>
+                <div className="pb-5 flex flex-wrap gap-2">
+                  {muscleOptions.map(m => (
+                    <button key={m} onClick={() => setPrimaryMuscle(primaryMuscle === m ? '' : m)} className={`px-3 py-1.5 rounded-full text-xs font-bold capitalize transition-all border ${primaryMuscle === m ? 'bg-amber-500 text-gray-900 border-amber-500 shadow-md' : 'bg-transparent text-gray-400 border-gray-600 hover:border-gray-400'}`}>
+                      {m}
+                    </button>
+                  ))}
+                </div>
               )}
             </div>
+
             <div className="border-b border-[#374151]">
               <button onClick={() => toggleSection('equipment')} className="w-full flex justify-between items-center py-4 text-gray-300 hover:text-white transition-colors">
-                <span className="font-bold flex items-center gap-2">Equipamiento {equipment && <span className="bg-amber-500/20 text-amber-500 text-[10px] uppercase px-2 py-0.5 rounded-full">{equipment}</span>}</span>{openSection === 'equipment' ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                <span className="font-bold flex items-center gap-2">Equipamiento {equipment && <span className="bg-amber-500/20 text-amber-500 text-[10px] uppercase px-2 py-0.5 rounded-full">{equipment}</span>}</span>
+                {openSection === 'equipment' ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
               </button>
               {openSection === 'equipment' && (
-                <div className="pb-5 flex flex-wrap gap-2">{equipmentOptions.map(eq => <button key={eq} onClick={() => setEquipment(equipment === eq ? '' : eq)} className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all border ${equipment === eq ? 'bg-amber-500 text-gray-900 border-amber-500 shadow-md' : 'bg-transparent text-gray-400 border-gray-600 hover:border-gray-400'}`}>{eq}</button>)}</div>
+                <div className="pb-5 flex flex-wrap gap-2">
+                  {equipmentOptions.map(eq => (
+                    <button key={eq} onClick={() => setEquipment(equipment === eq ? '' : eq)} className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all border ${equipment === eq ? 'bg-amber-500 text-gray-900 border-amber-500 shadow-md' : 'bg-transparent text-gray-400 border-gray-600 hover:border-gray-400'}`}>
+                      {eq}
+                    </button>
+                  ))}
+                </div>
               )}
             </div>
-            {['Nivel', 'Movimiento', 'Mis etiquetas'].map((sec) => (
+
+            <div className="border-b border-[#374151]">
+              <button onClick={() => toggleSection('level')} className="w-full flex justify-between items-center py-4 text-gray-300 hover:text-white transition-colors">
+                <span className="font-bold flex items-center gap-2">Nivel {level && <span className="bg-amber-500/20 text-amber-500 text-[10px] uppercase px-2 py-0.5 rounded-full">{level}</span>}</span>
+                {openSection === 'level' ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+              </button>
+              {openSection === 'level' && (
+                <div className="pb-5 flex flex-wrap gap-2">
+                  {levelOptions.map(lv => (
+                    <button key={lv} onClick={() => setLevel(level === lv ? '' : lv)} className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all border ${level === lv ? 'bg-amber-500 text-gray-900 border-amber-500 shadow-md' : 'bg-transparent text-gray-400 border-gray-600 hover:border-gray-400'}`}>
+                      {lv}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {['Movimiento', 'Especialidad', 'Mecánica', 'Articulación', 'Mis etiquetas'].map((sec) => (
               <div key={sec} className="border-b border-[#374151]">
-                <button className="w-full flex justify-between items-center py-4 text-gray-600 cursor-not-allowed"><span className="font-bold">{sec}</span><ChevronDown size={20} /></button>
+                <button className="w-full flex justify-between items-center py-4 text-gray-600 cursor-not-allowed">
+                  <span className="font-bold">{sec}</span><ChevronDown size={20} />
+                </button>
               </div>
             ))}
           </div>
         </div>
+
         <div className="p-4 border-t border-[#374151] bg-[#111827] sm:rounded-b-2xl shrink-0 flex justify-center">
-          <Button onClick={handleSave} disabled={!name.trim() || isSaving} className="w-full md:w-auto md:px-16 py-3.5 text-lg font-black shadow-[0_0_20px_rgba(245,158,11,0.2)]">{isSaving ? 'Guardando...' : 'Guardar Ejercicio'}</Button>
+          <Button onClick={handleSave} disabled={!name.trim() || isSaving} className="w-full md:w-auto md:px-16 py-3.5 text-lg font-black shadow-[0_0_20px_rgba(245,158,11,0.2)]">
+            {isSaving ? 'Guardando...' : 'Guardar Ejercicio'}
+          </Button>
         </div>
       </div>
     </div>
   );
 }
 
+// --- GESTOR DE PLANTILLAS Y WORKOUTS ---
 function TemplatesManager({ programs, type, onBack, onGoToBuilder }) {
   const libraryPrograms = programs.filter(p => p.isTemplate && (p.programType === type || (!p.programType && type === 'program')));
   const handleDeleteTemplate = async (id) => {
@@ -753,7 +830,7 @@ function TemplatesManager({ programs, type, onBack, onGoToBuilder }) {
   );
 }
 
-// --- CONSTRUCTORES ---
+// --- CONSTRUCTOR MACRO (VISTA CALENDARIO CON DRAG & DROP SEGURO) ---
 function ProgramMacroBuilder({ initialProgram, onOpenDayBuilder, onSave, onCancel }) {
   const [name, setName] = useState(initialProgram?.name || '');
   const [description, setDescription] = useState(initialProgram?.description || '');
@@ -785,6 +862,7 @@ function ProgramMacroBuilder({ initialProgram, onOpenDayBuilder, onSave, onCance
     const copiedDay = deepCopy(sourceDay);
     copiedDay.id = targetId;
     newDays.push(copiedDay);
+    
     setDays(newDays);
     setDragActionModal(null);
   };
@@ -808,7 +886,10 @@ function ProgramMacroBuilder({ initialProgram, onOpenDayBuilder, onSave, onCance
         >
           <div className="text-[10px] text-gray-500 font-bold mb-1">Día {relativeDayIndex + 1}</div>
           {existingDayData ? (
-            <div draggable onDragStart={(e) => { e.stopPropagation(); handleDragStart(e, relativeDayId); }} className="bg-[#1f2937] border border-amber-500/50 rounded p-2 shadow-sm cursor-grab active:cursor-grabbing hover:border-amber-500">
+            <div 
+              draggable onDragStart={(e) => { e.stopPropagation(); handleDragStart(e, relativeDayId); }}
+              className="bg-[#1f2937] border border-amber-500/50 rounded p-2 shadow-sm cursor-grab active:cursor-grabbing hover:border-amber-500"
+            >
               <p className="text-[11px] font-bold text-amber-500 truncate leading-tight">{existingDayData.name}</p>
               <p className="text-[9px] text-gray-400 mt-1 flex justify-between items-center"><span>{existingDayData.blocks?.length || 0} Blq.</span><Move size={10}/></p>
             </div>
@@ -820,7 +901,10 @@ function ProgramMacroBuilder({ initialProgram, onOpenDayBuilder, onSave, onCance
     }
     gridRows.push(
       <div key={`w-${w}`} className="flex flex-col md:flex-row">
-        <div className="w-full md:w-16 bg-[#111827] flex items-center justify-center border-b md:border-b-0 border-r border-[#374151] py-2 md:py-0"><span className="text-xs font-black text-gray-400 -rotate-90 hidden md:block uppercase tracking-widest whitespace-nowrap">Semana {w+1}</span><span className="text-xs font-black text-gray-400 md:hidden uppercase tracking-widest">Semana {w+1}</span></div>
+        <div className="w-full md:w-16 bg-[#111827] flex items-center justify-center border-b md:border-b-0 border-r border-[#374151] py-2 md:py-0">
+          <span className="text-xs font-black text-gray-400 -rotate-90 hidden md:block uppercase tracking-widest whitespace-nowrap">Semana {w+1}</span>
+          <span className="text-xs font-black text-gray-400 md:hidden uppercase tracking-widest">Semana {w+1}</span>
+        </div>
         <div className="flex-1 grid grid-cols-7">{weekCells}</div>
       </div>
     );
@@ -869,6 +953,7 @@ function ProgramMacroBuilder({ initialProgram, onOpenDayBuilder, onSave, onCance
   );
 }
 
+// --- CONSTRUCTOR MICRO (DETALLE DE UN DÍA) ---
 function DayMicroBuilder({ programData, relativeDayId, targetDate, exercises, workoutLogs, studentId, libraryPrograms, onSaveDay, onSaveToLibrary, onCancel }) {
   const existingDayObj = programData?.days?.find(d => d.id === relativeDayId);
   const existingDay = existingDayObj ? deepCopy(existingDayObj) : null;
@@ -1071,6 +1156,8 @@ function AdminMonthlyPlanner({ studentId, users, programs, workoutLogs, onClose,
 
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [activeDateForModal, setActiveDateForModal] = useState(null);
+  
+  const [activeVideoUrl, setActiveVideoUrl] = useState(null);
 
   return (
     <div className="space-y-6">
@@ -1219,6 +1306,11 @@ function AdminMonthlyPlanner({ studentId, users, programs, workoutLogs, onClose,
                                   <div className="flex justify-between items-start mb-2">
                                     <div className="flex items-center gap-2">
                                       <span className="text-white font-bold">{ex.name}</span>
+                                      {fullExInfo?.videoUrl && (
+                                        <button onClick={() => setActiveVideoUrl(fullExInfo.videoUrl)} className="text-red-500 hover:text-red-400 p-1 bg-red-500/10 rounded-full transition-colors" title="Ver video del ejercicio">
+                                          <Youtube size={14} />
+                                        </button>
+                                      )}
                                     </div>
                                     <span className="text-[10px] font-mono bg-[#374151] text-gray-300 px-2 py-1 rounded border border-[#374151]">Plan: {ex.sets}x{ex.reps} {ex.kg ? `@${ex.kg}kg` : ''}</span>
                                   </div>
@@ -1247,6 +1339,8 @@ function AdminMonthlyPlanner({ studentId, users, programs, workoutLogs, onClose,
           </div>
         </div>
       )}
+      
+      {activeVideoUrl && <VideoPlayerModal videoUrl={activeVideoUrl} onClose={() => setActiveVideoUrl(null)} />}
     </div>
   );
 }
