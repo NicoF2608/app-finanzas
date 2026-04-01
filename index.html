@@ -166,10 +166,10 @@
           if (!isOpen) return null;
           return (
               <div className="fixed inset-0 bg-black/90 z-[100] flex items-center justify-center p-4 backdrop-blur-sm overflow-y-auto">
-                  <div className="bg-[#1f2937] w-full max-w-2xl rounded-3xl border border-gray-700 shadow-2xl my-8 relative">
+                  <div className="bg-[#1f2937] w-full max-w-2xl rounded-3xl border border-gray-700 shadow-2xl my-8 relative animate-in zoom-in-95">
                       <div className="p-6 border-b border-gray-700 flex justify-between items-center bg-[#1f2937] rounded-t-3xl sticky top-0 z-10">
                           <h3 className="text-xl font-black text-white uppercase italic">{title}</h3>
-                          <button onClick={onClose} className="p-2 bg-gray-800 text-gray-400 hover:text-white rounded-full"><X size={24}/></button>
+                          <button onClick={onClose} className="p-2 bg-gray-800 text-gray-400 hover:text-white rounded-full transition-colors"><X size={24}/></button>
                       </div>
                       <div className="p-6">{children}</div>
                   </div>
@@ -860,14 +860,27 @@
 
         function ExerciseModal({ initialData, db, appId, onClose }) {
           const [name, setName] = useState(initialData?.name || '');
+          const [mediaType, setMediaType] = useState(initialData?.mediaType || (initialData?.videoUrl ? 'url' : 'none'));
           const [videoUrl, setVideoUrl] = useState(initialData?.videoUrl || '');
+          const [instructions, setInstructions] = useState(initialData?.instructions || '');
+          
           const [primaryMuscle, setPrimaryMuscle] = useState(initialData?.primaryMuscle || '');
+          const [equipment, setEquipment] = useState(initialData?.equipment || '');
+          const [level, setLevel] = useState(initialData?.level || '');
+          
+          const [openSection, setOpenSection] = useState('muscle'); 
           const [isSaving, setIsSaving] = useState(false);
+
+          const muscleOptions = ['abdominales', 'abductores', 'aductores', 'antebrazo', 'bíceps', 'cuello', 'cuádriceps', 'dorsal', 'espalda', 'flexores de cadera', 'gemelo', 'glúteo', 'hombro', 'isquiotibiales', 'lumbar', 'oblicuos', 'pecho', 'pectoral', 'tibial', 'trapecio', 'tríceps'];
+          const equipmentOptions = ['Ninguno', 'Mancuernas', 'Barra', 'Kettlebell', 'Polea', 'Máquina', 'Banda Elástica', 'TRX', 'Disco', 'Balón Medicinal', 'Propio Peso'];
+          const levelOptions = ['Principiante', 'Intermedio', 'Avanzado'];
 
           const handleSave = async () => {
             if (!name.trim()) return;
             setIsSaving(true);
-            const dataObj = { name: name.trim(), videoUrl, primaryMuscle, updatedAt: new Date().toISOString() };
+            const dataObj = { 
+              name: name.trim(), mediaType, videoUrl: mediaType === 'url' ? videoUrl : '', instructions, primaryMuscle, equipment, level, updatedAt: new Date().toISOString() 
+            };
             try {
               if (initialData.id) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'exercises', initialData.id), dataObj, { merge: true });
               else await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'exercises'), { ...dataObj, createdAt: new Date().toISOString() });
@@ -876,15 +889,101 @@
             setIsSaving(false);
           };
 
+          const embedUrl = getYoutubeEmbedUrl(videoUrl);
+
+          const RadioOption = ({ label, checked, onChange, disabled }) => (
+            <label className={`flex items-center gap-4 p-4 rounded-2xl border transition-all ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'} ${checked ? 'bg-amber-500/10 border-amber-500' : 'bg-[#111827] border-gray-800 hover:border-gray-600'}`}>
+              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${checked ? 'border-amber-500' : 'border-gray-600'}`}>
+                {checked && <div className="w-2.5 h-2.5 bg-amber-500 rounded-full" />}
+              </div>
+              <span className={`text-sm font-bold ${checked ? 'text-amber-500' : 'text-gray-300'}`}>{label}</span>
+            </label>
+          );
+
+          const AccordionSection = ({ title, options, value, setValue, sectionKey }) => (
+            <div className="border-b border-gray-800">
+              <button type="button" onClick={() => setOpenSection(openSection === sectionKey ? null : sectionKey)} className="w-full flex justify-between items-center py-5 text-white hover:text-amber-500 transition-colors">
+                <span className="font-bold tracking-wide flex items-center gap-3 text-sm">
+                  {title}
+                  {value && <span className="bg-amber-500/20 text-amber-500 text-[10px] uppercase tracking-widest px-3 py-1 rounded-lg">{value}</span>}
+                </span>
+                {openSection === sectionKey ? <ChevronUp size={20}/> : <ChevronDown size={20}/>}
+              </button>
+              {openSection === sectionKey && (
+                <div className="pb-6 pt-2 flex flex-wrap gap-2 animate-in fade-in slide-in-from-top-2">
+                  {options.map(opt => (
+                    <button type="button" key={opt} onClick={() => setValue(value === opt ? '' : opt)} className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all border ${value === opt ? 'bg-amber-500 text-gray-900 border-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.3)]' : 'bg-[#111827] text-gray-400 border-gray-800 hover:border-gray-600 hover:text-gray-300'}`}>
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+
           return (
-              <Modal isOpen={true} onClose={onClose} title={initialData.id ? "Editar Ejercicio" : "Nuevo Ejercicio"}>
-                  <div className="space-y-6">
-                      <input type="text" placeholder="NOMBRE DEL EJERCICIO (Ej: Peso Muerto)" value={name} onChange={e=>setName(e.target.value)} className="w-full bg-[#111827] border border-gray-700 rounded-2xl px-6 py-4 text-white font-black uppercase text-lg" />
-                      <input type="text" placeholder="MÚSCULO PRINCIPAL (Ej: Piernas)" value={primaryMuscle} onChange={e=>setPrimaryMuscle(e.target.value)} className="w-full bg-[#111827] border border-gray-700 rounded-2xl px-6 py-4 text-white font-bold" />
-                      <input type="text" placeholder="LINK DE YOUTUBE (Opcional)" value={videoUrl} onChange={e=>setVideoUrl(e.target.value)} className="w-full bg-[#111827] border border-gray-700 rounded-2xl px-6 py-4 text-white font-bold" />
-                      <button onClick={handleSave} disabled={!name || isSaving} className="w-full py-5 bg-gradient-to-r from-amber-500 to-orange-500 text-gray-900 rounded-2xl font-black uppercase tracking-widest text-sm shadow-xl">{isSaving ? 'GUARDANDO...' : 'GUARDAR'}</button>
+            <Modal isOpen={true} onClose={onClose} title={initialData.id ? "Editar Ejercicio" : "Crear un ejercicio"}>
+              <div className="space-y-8 max-h-[70vh] overflow-y-auto hide-scrollbar p-2">
+                <div>
+                  <label className="block text-sm font-bold text-gray-300 mb-3 uppercase tracking-widest">Nombre del ejercicio</label>
+                  <input type="text" placeholder="Ej: Remo con barra" value={name} onChange={e=>setName(e.target.value)} className="w-full bg-[#111827] border border-gray-700 rounded-2xl px-6 py-4 text-white font-black text-xl uppercase tracking-tight focus:outline-none focus:border-amber-500 transition-colors" />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-gray-300 mb-4 uppercase tracking-widest">¿Quieres añadir un vídeo o una imagen?</label>
+                  <div className="space-y-3 mb-6">
+                    <RadioOption label="Añade una URL válida de Youtube o Vimeo" checked={mediaType === 'url'} onChange={() => setMediaType('url')} />
+                    <RadioOption label="Subir imagen (Pronto)" checked={mediaType === 'image'} onChange={() => {}} disabled />
+                    <RadioOption label="No subir vídeo ni imagen" checked={mediaType === 'none'} onChange={() => setMediaType('none')} />
                   </div>
-              </Modal>
+
+                  {mediaType === 'url' && (
+                    <div className="mt-4 p-6 bg-[#111827] rounded-3xl border border-gray-800 space-y-6">
+                      <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Añade una URL válida de Youtube</label>
+                        <input type="text" placeholder="Ej: https://www.youtube.com/watch?v=..." value={videoUrl} onChange={e=>setVideoUrl(e.target.value)} className="w-full bg-[#1f2937] border border-gray-700 rounded-xl px-5 py-4 text-white focus:outline-none focus:border-amber-500 text-sm font-medium" />
+                      </div>
+                      
+                      <div className="w-full max-w-sm mx-auto aspect-video bg-black rounded-2xl border border-gray-700 flex flex-col items-center justify-center overflow-hidden relative shadow-2xl">
+                        {embedUrl ? (
+                          <iframe width="100%" height="100%" src={embedUrl} title="YouTube video preview" frameBorder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen></iframe>
+                        ) : (
+                          <div className="text-gray-600 flex flex-col items-center gap-3 p-4 text-center">
+                            <Youtube size={36} className="opacity-40" />
+                            <span className="text-xs font-bold uppercase tracking-widest leading-relaxed">Ingresá un link para previsualizar</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-gray-300 mb-3 uppercase tracking-widest">Instrucciones (opcional)</label>
+                  <textarea placeholder="Ej: Para iniciar el movimiento debemos colocarnos de pie..." value={instructions} onChange={e=>setInstructions(e.target.value)} className="w-full bg-[#111827] border border-gray-700 rounded-2xl px-6 py-5 text-gray-300 text-sm focus:outline-none focus:border-amber-500 min-h-[120px] leading-relaxed" />
+                </div>
+
+                <div className="border-t border-gray-800 pt-4">
+                  <AccordionSection title="Músculo principal" options={muscleOptions} value={primaryMuscle} setValue={setPrimaryMuscle} sectionKey="muscle" />
+                  <AccordionSection title="Equipamiento" options={equipmentOptions} value={equipment} setValue={setEquipment} sectionKey="equipment" />
+                  <AccordionSection title="Nivel" options={levelOptions} value={level} setValue={setLevel} sectionKey="level" />
+                  
+                  {['Movimiento', 'Especialidad', 'Mecánica', 'Articulación', 'Mis etiquetas'].map((sec) => (
+                    <div key={sec} className="border-b border-gray-800">
+                      <button className="w-full flex justify-between items-center py-5 text-gray-600 cursor-not-allowed">
+                        <span className="font-bold text-sm tracking-wide">{sec}</span><ChevronDown size={20} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="pt-6">
+                  <button onClick={handleSave} disabled={!name.trim() || isSaving} className="w-full py-5 bg-gradient-to-r from-amber-500 to-orange-500 text-gray-900 rounded-2xl font-black uppercase tracking-[0.2em] shadow-[0_10px_30px_rgba(245,158,11,0.3)] hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 disabled:hover:scale-100">
+                    {isSaving ? 'GUARDANDO...' : 'GUARDAR EJERCICIO'}
+                  </button>
+                </div>
+              </div>
+            </Modal>
           );
         }
 
